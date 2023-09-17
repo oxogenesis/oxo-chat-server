@@ -7,7 +7,7 @@ const oxoKeyPairs = require("oxo-keypairs")
 //config
 const SelfURL = "ws://127.0.0.1:8000"
 //standalone server
-//const Seed = oxoKeyPairs.generateSeed("obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf", 'secp256k1')
+// const Seed = oxoKeyPairs.generateSeed("obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf", 'secp256k1')
 // const SelfURL = "wss://ru.oxo-chat-server.com"
 const Seed = "xxJTfMGZPavnqHhcEcHw5ToPCHftw"
 const OtherServer = []
@@ -429,7 +429,7 @@ async function checkClientMessage(ws, message) {
 function startClientServer() {
   if (ClientServer == null) {
     ClientServer = new WebSocket.Server({
-      port: 3000, //to bind on 80, must use 'sudo node main.js'
+      port: 8000, //to bind on 80, must use 'sudo node main.js'
       clientTracking: true,
       maxPayload: 150 * 1024
     })
