@@ -5,7 +5,7 @@ const prisma = new PrismaClient()
 const oxoKeyPairs = require("oxo-keypairs")
 
 //config
-const SelfURL = "ws://127.0.0.1:3000"
+const SelfURL = "ws://127.0.0.1:8000"
 //standalone server
 //const Seed = oxoKeyPairs.generateSeed("obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf", 'secp256k1')
 // const SelfURL = "wss://ru.oxo-chat-server.com"
