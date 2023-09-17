@@ -1,0 +1,35 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model BULLETINS {
+  hash       String  @id
+  address    String
+  sequence   Int
+  content    String
+  quote      String
+  json       String
+  signed_at  BigInt
+  created_at BigInt
+  pre_hash   String?
+  next_hash  String?
+}
+
+model QUOTES {
+  main_hash  String
+  quote_hash String
+  address    String
+  sequence   Int
+  content    String
+  signed_at  BigInt
+
+  @@id([main_hash, quote_hash])
+}
