@@ -22,30 +22,35 @@ $ nvm list
   * 18.17.1 (Currently using 64-bit executable)  
 
 # run code
+//start service  
+cd oxo-chat-server/service  
+npm install  
+node main.js  
 
+//start web  
+cd ../web  
+npm run dev  
 
+# deploy with ssl, nginx, pm2, pg, Ubuntu 22.04
+apt install nginx  
+ufw allow 'Nginx Full'  
+ufw allow 22/tcp  
+ufw enable  
+ufw status  
 
+add-apt-repository ppa:certbot/certbot  
+apt update  
+apt install python-certbot-nginx  
 
-# deploy with ssl, nginx, pm2
-sudo apt install nginx  
-sudo ufw allow 'Nginx Full'  
-sudo ufw allow 22/tcp  
-sudo ufw enable  
-sudo ufw status  
-
-sudo add-apt-repository ppa:certbot/certbot  
-sudo apt update  
-sudo apt install python-certbot-nginx  
-
-sudo certbot --nginx -d oxo-chat-server.com -d ru.oxo-chat-server.com  
+certbot --nginx -d oxo-chat-server.com -d ru.oxo-chat-server.com  
 Enter your email address  
 Enter “A” for Agree  
 Enter “Y” for Yes  
 Enter “2”  
 sudo certbot renew --dry-run  
   
-sudo mv /etc/nginx/sites-available/default /etc/nginx/sites-available/default.backup  
-sudo nano /etc/nginx/sites-available/default  
+mv /etc/nginx/sites-available/default /etc/nginx/sites-available/default.backup  
+nano /etc/nginx/sites-available/default  
   
 ```
 #https on 80 from localhost:8000
@@ -113,8 +118,33 @@ server {
 }  
 ```
 
-sudo nginx -t  
-sudo systemctl reload nginx  
-  
-sudo npm install -g pm2  
-pm2 start main.js  
+//nvm  
+curl https://raw.githubusercontent.com/creationix/nvm/master/install.sh | bash  
+source ~/.profile  
+nvm install 18.17.1  
+npm install -g pm2  
+
+//pg  
+apt install postgresql postgresql-contrib  
+psql -V  
+psql (PostgreSQL) 14.9 (Ubuntu 14.9-0ubuntu0.22.04.1)  
+su - postgres  
+psql  
+\l  
+\conninfo  
+\password postgres  
+create database oxo  
+\q  
+
+//start service  
+git clone https://github.com/oxogenesis/oxo-chat-server  
+cd oxo-chat-server/service  
+npm install  
+npx prisma generate  
+pm2 start main.js --name "service"  
+
+//start web  
+cd ../web  
+npm install  
+pm2 start "npm run dev" --name "web"  
+
