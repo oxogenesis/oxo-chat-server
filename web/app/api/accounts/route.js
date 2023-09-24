@@ -6,7 +6,7 @@ import prisma from '@/lib/prisma';
 // import { PrismaClient } from '@prisma/client'
 // const prisma = new PrismaClient()
 
-export async function GET(request) {
+export async function GET(request, { params }) {
   // console.log(`api/accounts=============================>>>0`)
   try {
     let accounts = await prisma.BULLETINS.groupBy({

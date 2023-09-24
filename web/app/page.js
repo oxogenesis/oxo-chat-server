@@ -1,28 +1,14 @@
+
 import Link from "next/link"
 import Account from "@/components/Account"
 import Avatar from "@/components/Avatar"
 import Timestamp from "@/components/Timestamp"
 
-async function getData() {
-  let url = `${process.env.BASE_URL}/api/home`
-  const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    // next: { revalidate: 60 }
-    cache: 'no-store'
-  })
-  const json = await response.json()
-  if (!json) {
-    return { bulletins: [], bulletin_size: 0, account_size: 0 }
-  } else {
-    return json
-  }
-}
-
-async function Home() {
-  let data = await getData()
-  let bulletins = data.bulletins
-  let bulletin_size = data.bulletin_size
-  let account_size = data.account_size
+async function Page(props) {
+  const data = await getData()
+  const bulletins = data.bulletins
+  const bulletin_size = data.bulletin_size
+  const account_size = data.account_size
 
   return (
     <div>
@@ -56,4 +42,21 @@ async function Home() {
   )
 }
 
-export default Home
+export async function getData() {
+  const res = await fetch(`${process.env.BASE_URL}/api/home`, {
+    headers: { 'Content-Type': 'application/json' },
+    // next: { revalidate: 60 }
+    cache: 'no-store'
+  })
+  const data = await res.json()
+  if (!data) {
+    const bulletins = []
+    const a = 0
+    return { props: { bulletins, a, a } }
+  } else {
+    return data
+    // return { props: { bulletins, bulletin_size, account_size } }
+  }
+}
+
+export default Page
