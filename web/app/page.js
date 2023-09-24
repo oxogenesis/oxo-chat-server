@@ -45,8 +45,8 @@ async function Page(props) {
 export async function getData() {
   const res = await fetch(`${process.env.BASE_URL}/api/home`, {
     headers: { 'Content-Type': 'application/json' },
-    // next: { revalidate: 60 }
-    cache: 'no-store'
+    next: { revalidate: 60 }
+    // cache: 'no-store'
   })
   const data = await res.json()
   if (!data) {

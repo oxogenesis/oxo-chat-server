@@ -13,8 +13,8 @@ async function getData(hash, page) {
   // console.log(`***********************************************************************************************************************************************************************************************************************************************************************************`)
   const response = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
-    // next: { revalidate: 60 }
-    cache: 'no-store'
+    next: { revalidate: 60 }
+    // cache: 'no-store'
   })
   const json = await response.json()
   if (!json) {

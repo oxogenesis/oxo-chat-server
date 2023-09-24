@@ -7,7 +7,7 @@ import prisma from '@/lib/prisma';
 // const prisma = new PrismaClient()
 
 export async function GET(request, { params }) {
-  console.log(`api/home=============================>>>0`)
+  // console.log(`api/home=============================>>>0`)
   try {
     //bulletin size
     let bulletin_size = await prisma.BULLETINS.count()
