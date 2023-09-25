@@ -4,6 +4,8 @@ oxo消息服务器
 * 公告缓存功能
 * 简单的网站功能（在线账户列表、公告展示）
 
+**[https://oxo-chat-server.com/](https://oxo-chat-server.com/)**  
+
 # code
 
 **[app](https://github.com/oxogenesis/oxo-chat-app)**  
