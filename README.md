@@ -151,3 +151,5 @@ cd ../web
 npm install  
 pm2 start "npm run dev" --name "web"  
 
+pm2 save  
+pm2 startup systemd  
