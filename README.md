@@ -31,6 +31,7 @@ node main.js
 
 //start web  
 cd ../web  
+npm install  
 npm run dev  
 
 # deploy with ssl, nginx, pm2, pg, Ubuntu 22.04
