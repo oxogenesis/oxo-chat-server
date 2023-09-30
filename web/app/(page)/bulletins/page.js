@@ -46,7 +46,7 @@ async function Bulletins(props) {
                 </div>
                 <div>
                   <span className="">
-                    {bulletin.content.slice(0, 44).trim()}
+                    {bulletin.content}
                   </span>
                 </div>
               </div>

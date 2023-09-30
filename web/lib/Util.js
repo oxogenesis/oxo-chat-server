@@ -1,4 +1,5 @@
 const PageSize = 20
+const ContentHeadSize = 88
 
 function cal_page_count(size) {
   let page = size * 1.0 / PageSize
@@ -36,6 +37,7 @@ function Json2Str(json) {
 
 export {
   PageSize,
+  ContentHeadSize,
   cal_page_count,
   timestamp_format,
   Json2Str

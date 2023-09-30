@@ -12,12 +12,20 @@ export default async function sitemap() {
   })
   bulletins = Json2Str(bulletins)
   bulletins = JSON.parse(bulletins)
-  bulletins = bulletins.map((bulletin) => (
+  let bulletin_urls = bulletins.map((bulletin) => (
     {
       url: `${bulletins_url}/${bulletin.hash}`,
       lastModified: new Date(parseInt(bulletin.signed_at)),
       changeFrequency: 'weekly',
       priority: 0.5
+    }
+  ))
+  let bulletin_json_urls = bulletins.map((bulletin) => (
+    {
+      url: `${bulletins_url}/${bulletin.hash}/json`,
+      lastModified: new Date(parseInt(bulletin.signed_at)),
+      changeFrequency: 'never',
+      priority: 0.1
     }
   ))
 
@@ -33,7 +41,7 @@ export default async function sitemap() {
   })
   accounts = Json2Str(accounts)
   accounts = JSON.parse(accounts)
-  accounts = accounts.map((account) => (
+  let account_urls = accounts.map((account) => (
     {
       url: `${accounts_url}/${account.address}/bulletins`,
       changeFrequency: 'weekly',
@@ -58,5 +66,5 @@ export default async function sitemap() {
       priority: 1
     }
   ]
-  return [...site_urls, ...accounts, ...bulletins]
+  return [...site_urls, ...account_urls, ...bulletin_urls, ...bulletin_json_urls]
 }

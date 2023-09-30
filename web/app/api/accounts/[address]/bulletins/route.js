@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { PageSize, Json2Str } from '@/lib/Util'
+import { PageSize, Json2Str, ContentHeadSize } from '@/lib/Util'
 
 import prisma from '@/lib/prisma';
 // import { PrismaClient } from '@prisma/client'
@@ -17,6 +17,12 @@ export async function GET(request, { params }) {
       where: {
         address: address
       },
+      select: {
+        sequence: true,
+        hash: true,
+        signed_at: true,
+        content: true
+      },
       orderBy: {
         signed_at: 'desc',
       }
@@ -28,6 +34,12 @@ export async function GET(request, { params }) {
     })
     bulletins = Json2Str(bulletins)
     bulletins = JSON.parse(bulletins)
+    bulletins = bulletins.map((bulletin) => ({
+      sequence: bulletin.sequence,
+      hash: bulletin.hash,
+      signed_at: bulletin.signed_at,
+      content: bulletin.content.slice(0, ContentHeadSize).trim()
+    }))
     return NextResponse.json({ bulletins: bulletins, bulletin_size: bulletin_size })
     // return res.status(200).json(data)
   } catch (error) {

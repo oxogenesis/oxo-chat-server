@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { Json2Str } from '../../../lib/Util'
+import { Json2Str, ContentHeadSize } from '@/lib/Util'
 
 import prisma from '@/lib/prisma';
 // import { PrismaClient } from '@prisma/client'
@@ -36,10 +36,24 @@ export async function GET(request, { params }) {
     let bulletins = await prisma.BULLETINS.findMany({
       where: {
         hash: { in: hot_bulletins_hash }
+      },
+      select: {
+        sequence: true,
+        address: true,
+        hash: true,
+        signed_at: true,
+        content: true
       }
     })
     bulletins = Json2Str(bulletins)
     bulletins = JSON.parse(bulletins)
+    bulletins = bulletins.map((bulletin) => ({
+      address: bulletin.address,
+      sequence: bulletin.sequence,
+      hash: bulletin.hash,
+      signed_at: bulletin.signed_at,
+      content: bulletin.content.slice(0, ContentHeadSize).trim()
+    }))
     bulletins.sort(function (a, b) { return hot_bulletins_hash.indexOf(a.hash) - hot_bulletins_hash.indexOf(b.hash) })
     return NextResponse.json({ bulletins: bulletins, bulletin_size: bulletin_size, account_size: accounts.length })
     // return res.status(200).json(data)
