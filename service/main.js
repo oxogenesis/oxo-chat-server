@@ -334,12 +334,10 @@ async function handleClientMessage(message, json) {
   } else if (json["Action"] == ActionCode["BulletinRandom"]) {
     console.log("=====================random")
     //send random bulletin
-    let bulletin = await prisma.$queryRaw(
-      prisma.sql`SELECT * FROM BULLETINS ORDER BY RANDOM() LIMIT 1`
-    )
-    if (bulletin != null) {
+    let bulletin = await prisma.$queryRaw`SELECT * FROM "public"."BULLETINS" ORDER BY RANDOM() LIMIT 1`
+    if (bulletin != null && bulletin.length > 0) {
       let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
-      ClientConns[address].send(bulletin.json)
+      ClientConns[address].send(bulletin[0].json)
     }
   } else if (json["To"] == Address && json["Action"] == ActionCode["ObjectResponse"] && json["Object"]["ObjectType"] == ObjectType["Bulletin"]) {
     CacheBulletin(json["Object"])
