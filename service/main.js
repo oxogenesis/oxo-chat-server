@@ -306,12 +306,12 @@ async function CacheBulletin(bulletin) {
 async function handleClientMessage(message, json) {
   if (json["To"] != null && ClientConns[json["To"]] != null && ClientConns[json["To"]].readyState == WebSocket.OPEN) {
     //forward message
-    ClientConns[json["To"]].send(message)
+    ClientConns[json["To"]].send(`${message}`)
 
     //cache bulletin
     if (json["Action"] == ActionCode["ObjectResponse"] && json["Object"]["ObjectType"] == ObjectType["Bulletin"]) {
-      //console.log(`###################LOG################### Client Message:`)
-      //console.log(message)
+      // console.log(`###################LOG################### Client Message:`)
+      // console.log(message)
       CacheBulletin(json["Object"])
     }
   }
