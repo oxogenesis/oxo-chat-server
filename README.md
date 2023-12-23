@@ -65,12 +65,10 @@ server {
   ssl_protocols TLSv1.2;  
   ssl_prefer_server_ciphers on;  
   ssl_ciphers EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH;  
-  root /usr/share/nginx/html;  
-  index index.html index.htm;  
   
   server_name localhost;  
   location / {
-    proxy_pass http://localhost:8000/;  
+    proxy_pass http://localhost:3000;  
     proxy_http_version 1.1;  
     proxy_set_header Host $http_host;  
     proxy_set_header X-Real-IP $remote_addr;  
@@ -102,7 +100,7 @@ server {
   
   server_name localhost;  
   location / {
-    proxy_pass http://localhost:3000/;  
+    proxy_pass http://localhost:8000/;  
     proxy_http_version 1.1;  
     proxy_set_header Upgrade $http_upgrade;  
     proxy_set_header Connection "upgrade";  
@@ -149,7 +147,8 @@ pm2 start main.js --name "service"
 //start web  
 cd ../web  
 npm install  
-pm2 start "npm run dev" --name "web"  
+npm run build  
+pm2 start npm --name web -- run start -- -p 3000  
 
 pm2 save  
 pm2 startup systemd  
