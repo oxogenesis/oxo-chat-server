@@ -1,8 +1,8 @@
 const oxoKeyPairs = require("oxo-keypairs")
 
 //config
-const ServerURL = "ws://127.0.0.1:8000"
-// const ServerURL = "wss://ru.oxo-chat-server.com"
+// const ServerURL = "ws://127.0.0.1:8000"
+const ServerURL = "wss://ru.oxo-chat-server.com"
 const Seed = "your_seed"
 // const Seed = "x5ChjcMhWEX4EuWmnxhrKJredj3PP"
 
@@ -127,9 +127,9 @@ let ActionCode = {
   "BulletinRequest": 201,
   "BulletinFileRequest": 202,
   "BulletinAddressListRequest": 203,
-  "BulletinAddressListReponse": 204,
+  "BulletinAddressListResponse": 204,
   "BulletinReplyListRequest": 205,
-  "BulletinReplyListReponse": 206,
+  "BulletinReplyListResponse": 206,
 
   "ChatDH": 301,
   "ChatMessage": 302,

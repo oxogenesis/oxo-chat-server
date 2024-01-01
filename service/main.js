@@ -98,9 +98,9 @@ let ActionCode = {
   "BulletinRequest": 201,
   "BulletinFileRequest": 202,
   "BulletinAddressListRequest": 203,
-  "BulletinAddressListReponse": 204,
+  "BulletinAddressListResponse": 204,
   "BulletinReplyListRequest": 205,
-  "BulletinReplyListReponse": 206,
+  "BulletinReplyListResponse": 206,
 
   "ChatDH": 301,
   "ChatMessage": 302,
