@@ -1,9 +1,10 @@
 const oxoKeyPairs = require("oxo-keypairs")
 
 //config
-// const ServerURL = "ws://127.0.0.1:3000"
-const ServerURL = "wss://ru.oxo-chat-server.com"
+const ServerURL = "ws://127.0.0.1:8000"
+// const ServerURL = "wss://ru.oxo-chat-server.com"
 const Seed = "your_seed"
+// const Seed = "x5ChjcMhWEX4EuWmnxhrKJredj3PP"
 
 const SelfURL = "ws://127.0.0.1:5000"
 
@@ -125,6 +126,10 @@ let ActionCode = {
   "BulletinRandom": 200,
   "BulletinRequest": 201,
   "BulletinFileRequest": 202,
+  "BulletinAddressListRequest": 203,
+  "BulletinAddressListReponse": 204,
+  "BulletinReplyListRequest": 205,
+  "BulletinReplyListReponse": 206,
 
   "ChatDH": 301,
   "ChatMessage": 302,
@@ -311,6 +316,27 @@ function genBulletinJson(sequence, pre_hash, quote, content, timestamp) {
   return signJson(json)
 }
 
+function genBulletinAddressListRequest(page) {
+  let json = {
+    "Action": ActionCode.BulletinAddressListRequest,
+    "Page": page,
+    "Timestamp": Date.now(),
+    "PublicKey": PublicKey
+  }
+  return signJson(json)
+}
+
+function genBulletinReplyListRequest(hash, page) {
+  let json = {
+    "Action": ActionCode.BulletinReplyListRequest,
+    "Hash": hash,
+    "Page": page,
+    "Timestamp": Date.now(),
+    "PublicKey": PublicKey
+  }
+  return signJson(json)
+}
+
 function CacheBulletin(bulletin) {
   let timestamp = Date.now()
   let hash = quarterSHA512(JSON.stringify(bulletin))
@@ -433,6 +459,11 @@ rl.on('line', function (line) {
         })
       }
     })
+  } else if (line == 'test') {
+    // let msg = genBulletinAddressListRequest(1)
+    let msg = genBulletinReplyListRequest("E0E219FEDB8C1EB1399EF19FF8357561", 1)
+    console.log(msg)
+    sendMessage(JSON.stringify(msg))
   } else if (line == 'close') {
     rl.close()
   } else {
@@ -765,4 +796,4 @@ http.createServer(function (request, response) {
     response.end();
   }
 })
-  .listen(8000);
+  .listen(8080);

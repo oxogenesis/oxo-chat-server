@@ -97,6 +97,10 @@ let ActionCode = {
   "BulletinRandom": 200,
   "BulletinRequest": 201,
   "BulletinFileRequest": 202,
+  "BulletinAddressListRequest": 203,
+  "BulletinAddressListReponse": 204,
+  "BulletinReplyListRequest": 205,
+  "BulletinReplyListReponse": 206,
 
   "ChatDH": 301,
   "ChatMessage": 302,
@@ -170,11 +174,11 @@ function teminateClientConn(ws) {
 }
 
 ////////hard copy from client<<<<<<<<
-let BulletinCount = 0
-let PageSize = 10
-let PageCount = BulletinCount / PageSize
-let PageLinks = ''
-let BulletinAccounts = []
+// let BulletinCount = 0
+const PageSize = 20
+// let PageCount = BulletinCount / PageSize
+// let PageLinks = ''
+// let BulletinAccounts = []
 
 const keypair = oxoKeyPairs.deriveKeypair(Seed)
 const Address = oxoKeyPairs.deriveAddress(keypair.publicKey)
@@ -202,6 +206,24 @@ function GenBulletinRequest(address, sequence, to) {
   return strJson
 }
 
+function GenBulletinAddressListResponse(address_list) {
+  let json = {
+    "Action": ActionCode["BulletinAddressListResponse"],
+    "List": address_list
+  }
+  let strJson = JSON.stringify(json)
+  return strJson
+}
+
+function GenBulletinReplyListResponse(reply_list) {
+  let json = {
+    "Action": ActionCode["BulletinReplyListResponse"],
+    "List": reply_list
+  }
+  let strJson = JSON.stringify(json)
+  return strJson
+}
+
 function GenObjectResponse(object, to) {
   let json = {
     "Action": ActionCode.ObjectResponse,
@@ -220,7 +242,7 @@ function GenDeclare() {
   //send declare to server
   let json = {
     "Action": ActionCode["Declare"],
-    "Timestamp": new Date().getTime(),
+    "Timestamp": Date.now(),
     "PublicKey": PublicKey
   }
   let sig = sign(JSON.stringify(json), PrivateKey)
@@ -251,23 +273,23 @@ async function CacheBulletin(bulletin) {
   })
 
   if (result) {
-    BulletinCount = BulletinCount + 1
-    PageCount = BulletinCount / PageSize + 1
-    PageLinks = ''
-    let PageLinkArray = []
-    if (PageCount > 1) {
-      for (let i = 1; i <= PageCount; i++) {
-        PageLinkArray.push(`<a href="/bulletins?page=${i}">${i}</a>`)
-      }
-      PageLinks = PageLinkArray.join(' ')
-    }
+    // BulletinCount = BulletinCount + 1
+    // PageCount = BulletinCount / PageSize + 1
+    // PageLinks = ''
+    // let PageLinkArray = []
+    // if (PageCount > 1) {
+    //   for (let i = 1; i <= PageCount; i++) {
+    //     PageLinkArray.push(`<a href="/bulletins?page=${i}">${i}</a>`)
+    //   }
+    //   PageLinks = PageLinkArray.join(' ')
+    // }
 
     //update account sequence
-    for (let i = 0; i < BulletinAccounts.length; i++) {
-      if (BulletinAccounts[i].address == address && BulletinAccounts[i].sequence < bulletin.sequence) {
-        BulletinAccounts[i].sequence = bulletin.sequence
-      }
-    }
+    // for (let i = 0; i < BulletinAccounts.length; i++) {
+    //   if (BulletinAccounts[i].address == address && BulletinAccounts[i].sequence < bulletin.sequence) {
+    //     BulletinAccounts[i].sequence = bulletin.sequence
+    //   }
+    // }
 
     //update pre_bulletin's next_hash
     result = await prisma.BULLETINS.update({
@@ -347,6 +369,56 @@ async function handleClientMessage(message, json) {
       let msg = GenBulletinRequest(address, json["Object"].Sequence + 1, address)
       ClientConns[address].send(msg)
     }
+  } else if (json["Action"] == ActionCode["BulletinAddressListRequest"] && json["Page"] > 0) {
+    let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
+    let result = await prisma.BULLETINS.groupBy({
+      by: 'address',
+      _count: {
+        address: true,
+      },
+      orderBy: {
+        _count: {
+          address: 'desc',
+        },
+      },
+      skip: (json["Page"] - 1) * PageSize,
+      take: PageSize,
+    })
+    let address_list = []
+    result.forEach(item => {
+      let new_item = {}
+      new_item[item.address] = item._count.address
+      address_list.push(new_item)
+    })
+    let msg = GenBulletinAddressListResponse(address_list)
+    ClientConns[address].send(msg)
+  } else if (json["Action"] == ActionCode["BulletinReplyListRequest"] && json["Page"] > 0) {
+    let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
+    let result = await prisma.QUOTES.findMany({
+      where: {
+        main_hash: json["Hash"]
+      },
+      select: {
+        quote_hash: true,
+        address: true,
+        sequence: true,
+        content: true,
+        signed_at: true
+      },
+      skip: (json["Page"] - 1) * PageSize,
+      take: PageSize,
+      orderBy: {
+        signed_at: 'desc'
+      }
+    })
+    let reply_list = []
+    result.forEach(item => {
+      timestamp = parseInt(item["signed_at"])
+      item["signed_at"] = new Date(timestamp)
+      reply_list.push(item)
+    })
+    let msg = GenBulletinReplyListResponse(reply_list)
+    ClientConns[address].send(msg)
   }
 }
 

@@ -125,6 +125,57 @@ let FileRequestSchema = {
   }
 }
 
+// BulletinCount DESC
+let BulletinAddressListRequestSchema = {
+  "type": "object",
+  "required": ["Action", "Page", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 5,
+  "properties": {
+    "Action": {
+      "type": "number"
+    },
+    "Page": {
+      "type": "number"
+    },
+    "Timestamp": {
+      "type": "number"
+    },
+    "PublicKey": {
+      "type": "string"
+    },
+    "Signature": {
+      "type": "string"
+    }
+  }
+}
+
+// Timestamp DESC
+let BulletinReplyListRequestSchema = {
+  "type": "object",
+  "required": ["Action", "Hash", "Page", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 6,
+  "properties": {
+    "Action": {
+      "type": "number"
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "Page": {
+      "type": "number"
+    },
+    "Timestamp": {
+      "type": "number"
+    },
+    "PublicKey": {
+      "type": "string"
+    },
+    "Signature": {
+      "type": "string"
+    }
+  }
+}
+
 //>>>chat<<<
 let ChatMessageSchema = {
   "type": "object",
@@ -365,6 +416,8 @@ var vObjectResponseSchema = ajv.compile(ObjectResponseSchema)
 var vBulletinRandomSchema = ajv.compile(BulletinRandomSchema)
 var vBulletinRequestSchema = ajv.compile(BulletinRequestSchema)
 var vFileRequestSchema = ajv.compile(FileRequestSchema)
+var vBulletinAddressListRequestSchema = ajv.compile(BulletinAddressListRequestSchema)
+var vBulletinReplyListRequestSchema = ajv.compile(BulletinReplyListRequestSchema)
 
 var vChatMessageSchema = ajv.compile(ChatMessageSchema)
 var vChatSyncSchema = ajv.compile(ChatSyncSchema)
@@ -378,7 +431,7 @@ var vGroupRequestSchema = ajv.compile(GroupRequestSchema)
 function checkClientSchema(strJson) {
   try {
     let json = JSON.parse(strJson)
-    if (vObjectResponseSchema(json) || vBulletinRandomSchema(json) || vBulletinRequestSchema(json) || vFileRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupRequestSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json)) {
+    if (vObjectResponseSchema(json) || vBulletinRandomSchema(json) || vBulletinRequestSchema(json) || vFileRequestSchema(json) || vBulletinAddressListRequestSchema(json) || vBulletinReplyListRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupRequestSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json)) {
       return json
     } else {
       return false
