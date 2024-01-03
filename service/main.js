@@ -387,7 +387,8 @@ async function handleClientMessage(message, json) {
     let address_list = []
     result.forEach(item => {
       let new_item = {}
-      new_item[item.address] = item._count.address
+      new_item['Address'] = item.address
+      new_item['Count'] = item._count.address
       address_list.push(new_item)
     })
     let msg = GenBulletinAddressListResponse(address_list)
@@ -413,8 +414,13 @@ async function handleClientMessage(message, json) {
     })
     let reply_list = []
     result.forEach(item => {
+      let new_item = {}
+      new_item['Address'] = item['address']
+      new_item['Sequence'] = item['sequence']
+      new_item['Hash'] = item['quote_hash']
+      new_item['Content'] = item['content']
       timestamp = parseInt(item["signed_at"])
-      item["signed_at"] = new Date(timestamp)
+      new_item["Timestamp"] = new Date(timestamp)
       reply_list.push(item)
     })
     let msg = GenBulletinReplyListResponse(reply_list)
