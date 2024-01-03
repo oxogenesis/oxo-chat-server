@@ -419,7 +419,7 @@ async function handleClientMessage(message, json) {
       new_item['Sequence'] = item['sequence']
       new_item['Hash'] = item['quote_hash']
       new_item['Content'] = item['content']
-      timestamp = parseInt(item["signed_at"])
+      let timestamp = parseInt(item["signed_at"])
       new_item["Timestamp"] = new Date(timestamp)
       reply_list.push(item)
     })
