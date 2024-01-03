@@ -421,7 +421,7 @@ async function handleClientMessage(message, json) {
       new_item['Content'] = item['content']
       let timestamp = parseInt(item["signed_at"])
       new_item["Timestamp"] = new Date(timestamp)
-      reply_list.push(item)
+      reply_list.push(new_item)
     })
     let msg = GenBulletinReplyListResponse(reply_list)
     ClientConns[address].send(msg)
