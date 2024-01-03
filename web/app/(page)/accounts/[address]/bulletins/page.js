@@ -1,8 +1,8 @@
 
-import Link from "next/link"
 import Pagination from "@/components/Pagination"
 import Timestamp from "@/components/Timestamp"
 import Account from "@/components/Account"
+import LinkBulletin from "@/components/LinkBulletin"
 import Avatar from "@/components/Avatar"
 
 async function getData(page, address) {
@@ -46,7 +46,7 @@ async function Bulletins(props) {
           <li key={bulletin.hash} className="py-1">
             <div className="flex flex-col">
               <div>
-                <Link href={`/bulletins/${bulletin.hash}`} className="font-bold bg-yellow-500 rounded-md px-1">#{bulletin.sequence}</Link>
+                <LinkBulletin hash={bulletin.hash} str={`#${bulletin.sequence}`} />
                 <Timestamp timestamp={bulletin.signed_at} />
               </div>
               <div>

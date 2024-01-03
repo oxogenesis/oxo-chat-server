@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { notFound } from 'next/navigation'
 import Account from "@/components/Account"
+import LinkBulletin from "@/components/LinkBulletin"
 import Avatar from "@/components/Avatar"
 import Timestamp from "@/components/Timestamp"
 import QRCode from "@/components/QRCode"
@@ -61,18 +62,18 @@ async function Bulletin(props) {
             <Link href={`/bulletins/${bulletin.hash}/json`} className="inline font-bold bg-blue-500 px-2 rounded-lg">Bulletin#{bulletin.hash}</Link>
             <br />
             <Account address={bulletin.address} />
-            <Link href={`/bulletins/${bulletin.hash}`} className="font-bold bg-yellow-500 rounded-md px-1">#{bulletin.sequence}</Link>
+            <LinkBulletin hash={bulletin.hash} str={`#${bulletin.sequence}`} />
             <br />
             <Timestamp timestamp={bulletin.signed_at} />
           </div>
           <div>
             {
               bulletin.sequence != 1 ?
-                <Link href={`/bulletins/${bulletin.pre_hash}`} className='inline bg-yellow-500 rounded-md px-0.5'>上一篇</Link> : <></>
+                <Link href={`/bulletins/${bulletin.pre_hash}`} className='inline font-bold bg-yellow-500 rounded-md px-0.5'>上一篇</Link> : <></>
             }
             {
               next ?
-                <Link href={`/bulletins/${next.hash}`} className='inline bg-yellow-500 rounded-md px-0.5'>下一篇</Link> : <></>
+                <Link href={`/bulletins/${next.hash}`} className='inline font-bold bg-yellow-500 rounded-md px-0.5'>下一篇</Link> : <></>
             }
           </div>
           {
@@ -80,7 +81,7 @@ async function Bulletin(props) {
               <div className="flex flex-wrap">
                 引用：{quotes.map((quote) => (
                   <div className="inline" key={quote.Hash}>
-                    <Link href={`/bulletins/${quote.Hash}`} className=' bg-yellow-500 rounded-md px-1'>{quote.Address}#{quote.Sequence}</Link>
+                    <Link href={`/bulletins/${quote.Hash}`} className='font-bold bg-yellow-500 rounded-md px-1'>{quote.Address}#{quote.Sequence}</Link>
                   </div>
                 ))}
               </div> : <></>
@@ -104,7 +105,7 @@ async function Bulletin(props) {
                 <div className="flex flex-col">
                   <div>
                     <Account address={reply.address} />
-                    <Link href={`/bulletins/${reply.quote_hash}`} className="font-bold bg-yellow-500 rounded-md px-1">#{reply.sequence}</Link>
+                    <LinkBulletin hash={reply.quote_hash} str={`#${reply.sequence}`} />
                     <Timestamp timestamp={reply.signed_at} />
                   </div>
                   <div>

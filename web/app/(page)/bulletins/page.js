@@ -1,6 +1,6 @@
-import Link from "next/link"
 import Pagination from "@/components/Pagination"
 import Account from "@/components/Account"
+import LinkBulletin from "@/components/LinkBulletin"
 import Avatar from "@/components/Avatar"
 import Timestamp from "@/components/Timestamp"
 
@@ -41,7 +41,7 @@ async function Bulletins(props) {
               <div className="flex flex-col">
                 <div>
                   <Account address={bulletin.address} />
-                  <Link href={`/bulletins/${bulletin.hash}`} className="font-bold bg-yellow-500 rounded-md px-1">#{bulletin.sequence}</Link>
+                  <LinkBulletin hash={bulletin.hash} str={`#${bulletin.sequence}`} />
                   <Timestamp timestamp={bulletin.signed_at} />
                 </div>
                 <div>
