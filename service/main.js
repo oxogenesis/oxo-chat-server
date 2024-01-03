@@ -206,18 +206,21 @@ function GenBulletinRequest(address, sequence, to) {
   return strJson
 }
 
-function GenBulletinAddressListResponse(address_list) {
+function GenBulletinAddressListResponse(page, address_list) {
   let json = {
     "Action": ActionCode["BulletinAddressListResponse"],
+    "Page": page,
     "List": address_list
   }
   let strJson = JSON.stringify(json)
   return strJson
 }
 
-function GenBulletinReplyListResponse(reply_list) {
+function GenBulletinReplyListResponse(hash, page, reply_list) {
   let json = {
     "Action": ActionCode["BulletinReplyListResponse"],
+    "Hash": hash,
+    "Page": page,
     "List": reply_list
   }
   let strJson = JSON.stringify(json)
@@ -391,7 +394,7 @@ async function handleClientMessage(message, json) {
       new_item['Count'] = item._count.address
       address_list.push(new_item)
     })
-    let msg = GenBulletinAddressListResponse(address_list)
+    let msg = GenBulletinAddressListResponse(json["Page"], address_list)
     ClientConns[address].send(msg)
   } else if (json["Action"] == ActionCode["BulletinReplyListRequest"] && json["Page"] > 0) {
     let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
@@ -423,7 +426,7 @@ async function handleClientMessage(message, json) {
       new_item["Timestamp"] = new Date(timestamp)
       reply_list.push(new_item)
     })
-    let msg = GenBulletinReplyListResponse(reply_list)
+    let msg = GenBulletinReplyListResponse(json["Hash"], json["Page"], reply_list)
     ClientConns[address].send(msg)
   }
 }
