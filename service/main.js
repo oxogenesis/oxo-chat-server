@@ -422,8 +422,7 @@ async function handleClientMessage(message, json) {
       new_item['Sequence'] = item['sequence']
       new_item['Hash'] = item['quote_hash']
       new_item['Content'] = item['content']
-      let timestamp = parseInt(item["signed_at"])
-      new_item["Timestamp"] = new Date(timestamp)
+      new_item["Timestamp"] = Number(item["signed_at"])
       reply_list.push(new_item)
     })
     let msg = GenBulletinReplyListResponse(json["Hash"], json["Page"], reply_list)
