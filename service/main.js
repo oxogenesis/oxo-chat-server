@@ -1,4 +1,4 @@
-const { PrismaClient } = require('@prisma/client')
+const { PrismaClient } = require("@prisma/client")
 
 const prisma = new PrismaClient()
 
@@ -7,13 +7,13 @@ const oxoKeyPairs = require("oxo-keypairs")
 //config
 const SelfURL = "ws://127.0.0.1:8000"
 //standalone server
-// const Seed = oxoKeyPairs.generateSeed("obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf", 'secp256k1')
+// const Seed = oxoKeyPairs.generateSeed("obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf", "secp256k1")
 // const SelfURL = "wss://ru.oxo-chat-server.com"
 const Seed = "xxJTfMGZPavnqHhcEcHw5ToPCHftw"
 const OtherServer = []
 
 //keep alive
-process.on('uncaughtException', function (err) {
+process.on("uncaughtException", function (err) {
   //打印出错误
   console.log(err)
   //打印出错误的调用栈方便调试
@@ -21,7 +21,7 @@ process.on('uncaughtException', function (err) {
 })
 
 //json
-const Schema = require('./schema.js')
+const Schema = require("./schema.js")
 
 function cloneJson(json) {
   return JSON.parse(JSON.stringify(json))
@@ -32,15 +32,15 @@ function toSetUniq(arr) {
 }
 
 //ws
-const WebSocket = require('ws')
+const WebSocket = require("ws")
 
 //crypto
-const Crypto = require('crypto')
+const Crypto = require("crypto")
 
 function hasherSHA512(str) {
   let sha512 = Crypto.createHash("sha512")
   sha512.update(str)
-  return sha512.digest('hex')
+  return sha512.digest("hex")
 }
 
 function halfSHA512(str) {
@@ -59,7 +59,7 @@ function strToHex(str) {
   for (let i = 0; i < length; i++) {
     arr[i] = (str.charCodeAt(i).toString(16))
   }
-  return arr.join('').toUpperCase()
+  return arr.join("").toUpperCase()
 }
 
 function sign(msg, sk) {
@@ -85,7 +85,7 @@ function VerifyJsonSignature(json) {
     json["Signature"] = sig
     return true
   } else {
-    console.log('signature invalid...')
+    console.log("signature invalid...")
     return false
   }
 }
@@ -177,13 +177,13 @@ function teminateClientConn(ws) {
 // let BulletinCount = 0
 const PageSize = 20
 // let PageCount = BulletinCount / PageSize
-// let PageLinks = ''
+// let PageLinks = ""
 // let BulletinAccounts = []
 
 const keypair = oxoKeyPairs.deriveKeypair(Seed)
-const Address = oxoKeyPairs.deriveAddress(keypair.publicKey)
-const PublicKey = keypair.publicKey
-const PrivateKey = keypair.privateKey
+const ServerAddress = oxoKeyPairs.deriveAddress(keypair.publicKey)
+const ServerPublicKey = keypair.publicKey
+const ServerPrivateKey = keypair.privateKey
 
 function sign(msg, sk) {
   let msgHexStr = strToHex(msg);
@@ -198,9 +198,9 @@ function GenBulletinRequest(address, sequence, to) {
     "Sequence": sequence,
     "To": to,
     "Timestamp": Date.now(),
-    "PublicKey": PublicKey
+    "PublicKey": ServerPublicKey
   }
-  let sig = sign(JSON.stringify(json), PrivateKey)
+  let sig = sign(JSON.stringify(json), ServerPrivateKey)
   json.Signature = sig
   let strJson = JSON.stringify(json)
   return strJson
@@ -233,9 +233,9 @@ function GenObjectResponse(object, to) {
     "Object": object,
     "To": to,
     "Timestamp": Date.now(),
-    "PublicKey": PublicKey,
+    "PublicKey": ServerPublicKey,
   }
-  let sig = sign(JSON.stringify(json), PrivateKey)
+  let sig = sign(JSON.stringify(json), ServerPrivateKey)
   json.Signature = sig
   let strJson = JSON.stringify(json)
   return strJson
@@ -246,83 +246,70 @@ function GenDeclare() {
   let json = {
     "Action": ActionCode["Declare"],
     "Timestamp": Date.now(),
-    "PublicKey": PublicKey
+    "PublicKey": ServerPublicKey
   }
-  let sig = sign(JSON.stringify(json), PrivateKey)
+  let sig = sign(JSON.stringify(json), ServerPrivateKey)
   json.Signature = sig
   let strJson = JSON.stringify(json)
   return strJson
 }
-
-////////hard copy from client>>>>>>>>
 
 async function CacheBulletin(bulletin) {
   let timestamp = Date.now()
   let hash = quarterSHA512(JSON.stringify(bulletin))
   let address = oxoKeyPairs.deriveAddress(bulletin.PublicKey)
 
-  let result = await prisma.BULLETINS.create({
-    data: {
-      hash: hash,
-      pre_hash: bulletin.PreHash,
-      address: address,
-      sequence: bulletin.Sequence,
-      content: bulletin.Content,
-      quote: JSON.stringify(bulletin.Quote),
-      json: JSON.stringify(bulletin),
-      signed_at: bulletin.Timestamp,
-      created_at: timestamp
-    }
-  })
-
-  if (result) {
-    // BulletinCount = BulletinCount + 1
-    // PageCount = BulletinCount / PageSize + 1
-    // PageLinks = ''
-    // let PageLinkArray = []
-    // if (PageCount > 1) {
-    //   for (let i = 1; i <= PageCount; i++) {
-    //     PageLinkArray.push(`<a href="/bulletins?page=${i}">${i}</a>`)
-    //   }
-    //   PageLinks = PageLinkArray.join(' ')
-    // }
-
-    //update account sequence
-    // for (let i = 0; i < BulletinAccounts.length; i++) {
-    //   if (BulletinAccounts[i].address == address && BulletinAccounts[i].sequence < bulletin.sequence) {
-    //     BulletinAccounts[i].sequence = bulletin.sequence
-    //   }
-    // }
-
-    //update pre_bulletin's next_hash
-    result = await prisma.BULLETINS.update({
+  let b = await prisma.BULLETINS.findFirst({
       where: {
-        hash: bulletin.PreHash,
-      },
+        hash: hash,
+      }
+    })
+  if (b == null) {
+    let result = await prisma.BULLETINS.create({
       data: {
-        next_hash: hash,
-      },
+        hash: hash,
+        pre_hash: bulletin.PreHash,
+        address: address,
+        sequence: bulletin.Sequence,
+        content: bulletin.Content,
+        quote: JSON.stringify(bulletin.Quote),
+        json: JSON.stringify(bulletin),
+        signed_at: bulletin.Timestamp,
+        created_at: timestamp
+      }
     })
 
-    //update quote
-    bulletin.Quote.forEach(async quote => {
-      result = await prisma.QUOTES.create({
+    if (result) {
+      //update pre_bulletin's next_hash
+      result = await prisma.BULLETINS.update({
+        where: {
+          hash: bulletin.PreHash,
+        },
         data: {
-          main_hash: quote.Hash,
-          quote_hash: hash,
-          address: address,
-          sequence: bulletin.Sequence,
-          content: bulletin.Content,
-          signed_at: bulletin.Timestamp
-        }
+          next_hash: hash,
+        },
       })
-    });
 
-    //Brocdcast to OtherServer
-    for (let i in OtherServer) {
-      let ws = ClientConns[OtherServer[i]["Address"]]
-      if (ws != undefined && ws.readyState == WebSocket.OPEN) {
-        ws.send(GenObjectResponse(bulletin, OtherServer[i]["Address"]))
+      //update quote
+      bulletin.Quote.forEach(async quote => {
+        result = await prisma.QUOTES.create({
+          data: {
+            main_hash: quote.Hash,
+            quote_hash: hash,
+            address: address,
+            sequence: bulletin.Sequence,
+            content: bulletin.Content,
+            signed_at: bulletin.Timestamp
+          }
+        })
+      })
+
+      //Brocdcast to OtherServer
+      for (let i in OtherServer) {
+        let ws = ClientConns[OtherServer[i]["Address"]]
+        if (ws != undefined && ws.readyState == WebSocket.OPEN) {
+          ws.send(GenObjectResponse(bulletin, OtherServer[i]["Address"]))
+        }
       }
     }
   }
@@ -335,8 +322,6 @@ async function handleClientMessage(message, json) {
 
     //cache bulletin
     if (json["Action"] == ActionCode["ObjectResponse"] && json["Object"]["ObjectType"] == ObjectType["Bulletin"]) {
-      // console.log(`###################LOG################### Client Message:`)
-      // console.log(message)
       CacheBulletin(json["Object"])
     }
   }
@@ -357,14 +342,13 @@ async function handleClientMessage(message, json) {
       ClientConns[address].send(bulletin.json)
     }
   } else if (json["Action"] == ActionCode["BulletinRandom"]) {
-    console.log("=====================random")
     //send random bulletin
     let bulletin = await prisma.$queryRaw`SELECT * FROM "public"."BULLETINS" ORDER BY RANDOM() LIMIT 1`
-    if (bulletin != null && bulletin.length > 0) {
+    if (bulletin != null) {
       let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
       ClientConns[address].send(bulletin[0].json)
     }
-  } else if (json["To"] == Address && json["Action"] == ActionCode["ObjectResponse"] && json["Object"]["ObjectType"] == ObjectType["Bulletin"]) {
+  } else if (json["To"] == ServerAddress && json["Action"] == ActionCode["ObjectResponse"] && json["Object"]["ObjectType"] == ObjectType["Bulletin"]) {
     CacheBulletin(json["Object"])
     //fetch more bulletin
     let address = oxoKeyPairs.deriveAddress(json["Object"].PublicKey)
@@ -375,13 +359,13 @@ async function handleClientMessage(message, json) {
   } else if (json["Action"] == ActionCode["BulletinAddressListRequest"] && json["Page"] > 0) {
     let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
     let result = await prisma.BULLETINS.groupBy({
-      by: 'address',
+      by: "address",
       _count: {
         address: true,
       },
       orderBy: {
         _count: {
-          address: 'desc',
+          address: "desc",
         },
       },
       skip: (json["Page"] - 1) * PageSize,
@@ -390,8 +374,8 @@ async function handleClientMessage(message, json) {
     let address_list = []
     result.forEach(item => {
       let new_item = {}
-      new_item['Address'] = item.address
-      new_item['Count'] = item._count.address
+      new_item["Address"] = item.address
+      new_item["Count"] = item._count.address
       address_list.push(new_item)
     })
     let msg = GenBulletinAddressListResponse(json["Page"], address_list)
@@ -412,16 +396,16 @@ async function handleClientMessage(message, json) {
       skip: (json["Page"] - 1) * PageSize,
       take: PageSize,
       orderBy: {
-        signed_at: 'desc'
+        signed_at: "desc"
       }
     })
     let reply_list = []
     result.forEach(item => {
       let new_item = {}
-      new_item['Address'] = item['address']
-      new_item['Sequence'] = item['sequence']
-      new_item['Hash'] = item['quote_hash']
-      new_item['Content'] = item['content']
+      new_item["Address"] = item["address"]
+      new_item["Sequence"] = item["sequence"]
+      new_item["Hash"] = item["quote_hash"]
+      new_item["Content"] = item["content"]
       new_item["Timestamp"] = Number(item["signed_at"])
       reply_list.push(new_item)
     })
@@ -431,8 +415,8 @@ async function handleClientMessage(message, json) {
 }
 
 async function checkClientMessage(ws, message) {
-  // console.log(`###################LOG################### Client Message:`)
-  // console.log(`${message}`)
+  console.log(`###################LOG################### Client Message:`)
+  console.log(`${message}`)
   let json = Schema.checkClientSchema(message)
   if (json == false) {
     //json格式不合法
@@ -507,17 +491,17 @@ async function checkClientMessage(ws, message) {
 function startClientServer() {
   if (ClientServer == null) {
     ClientServer = new WebSocket.Server({
-      port: 8000, //to bind on 80, must use 'sudo node main.js'
+      port: 8000, //to bind on 80, must use "sudo node main.js"
       clientTracking: true,
       maxPayload: 512 * 1024
     })
 
-    ClientServer.on('connection', function connection(ws) {
-      ws.on('message', function incoming(message) {
+    ClientServer.on("connection", function connection(ws) {
+      ws.on("message", function incoming(message) {
         checkClientMessage(ws, message)
       })
 
-      ws.on('close', function close() {
+      ws.on("close", function close() {
         let connAddress = fetchClientConnAddress(ws)
         if (connAddress != null) {
           console.log(`client <${connAddress}> disconnect...`)
@@ -549,16 +533,16 @@ function keepOtherServerConn() {
     try {
       var ws = new WebSocket(randomServerUrl)
 
-      ws.on('open', function open() {
+      ws.on("open", function open() {
         ws.send(GenDeclare())
         ClientConns[notConnected[random]["Address"]] = ws
       })
 
-      ws.on('message', function incoming(message) {
+      ws.on("message", function incoming(message) {
         checkClientMessage(ws, message)
       })
 
-      ws.on('close', function close() {
+      ws.on("close", function close() {
         let connAddress = fetchClientConnAddress(ws)
         if (connAddress != null) {
           console.log(`client <${connAddress}> disconnect...`)
@@ -566,7 +550,7 @@ function keepOtherServerConn() {
         }
       })
     } catch (e) {
-      console.log('keepOtherServerConn error...')
+      console.log("keepOtherServerConn error...")
     }
   }
 }
