@@ -33,3 +33,23 @@ model QUOTES {
 
   @@id([main_hash, quote_hash])
 }
+
+model ECDHS {
+  address1  String
+  address2  String
+  partition Int
+  sequence  Int
+  json1     String
+  json2     String
+
+  @@id([address1, address2, partition, sequence])
+}
+
+model MESSAGES {
+  hash         String  @id
+  sour_address String
+  dest_address String
+  sequence     Int
+  signed_at    BigInt
+  json         String
+}

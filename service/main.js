@@ -78,11 +78,11 @@ function verifySignature(msg, sig, pk) {
 }
 
 function VerifyJsonSignature(json) {
-  let sig = json["Signature"]
-  delete json["Signature"]
+  let sig = json.Signature
+  delete json.Signature
   let tmpMsg = JSON.stringify(json)
   if (verifySignature(tmpMsg, sig, json.PublicKey)) {
-    json["Signature"] = sig
+    json.Signature = sig
     return true
   } else {
     console.log("signature invalid...")
@@ -91,56 +91,56 @@ function VerifyJsonSignature(json) {
 }
 
 let ActionCode = {
-  "Declare": 100,
-  "ObjectResponse": 101,
+  Declare: 100,
+  ObjectResponse: 101,
 
-  "BulletinRandom": 200,
-  "BulletinRequest": 201,
-  "BulletinFileRequest": 202,
-  "BulletinAddressListRequest": 203,
-  "BulletinAddressListResponse": 204,
-  "BulletinReplyListRequest": 205,
-  "BulletinReplyListResponse": 206,
+  BulletinRandom: 200,
+  BulletinRequest: 201,
+  BulletinFileRequest: 202,
+  BulletinAddressListRequest: 203,
+  BulletinAddressListResponse: 204,
+  BulletinReplyListRequest: 205,
+  BulletinReplyListResponse: 206,
 
-  "ChatDH": 301,
-  "ChatMessage": 302,
-  "ChatSync": 303,
-  "PrivateFileRequest": 304,
+  ChatDH: 301,
+  ChatMessage: 302,
+  ChatSync: 303,
+  PrivateFileRequest: 304,
 
-  "GroupRequest": 401,
-  "GroupManageSync": 402,
-  "GroupDH": 403,
-  "GroupMessageSync": 404,
-  "GroupFileRequest": 405
+  GroupRequest: 401,
+  GroupManageSync: 402,
+  GroupDH: 403,
+  GroupMessageSync: 404,
+  GroupFileRequest: 405
 }
 
 //message
 const MessageCode = {
-  "JsonSchemaInvalid": 0, //json schema invalid...
-  "SignatureInvalid": 1, //signature invalid...
-  "TimestampInvalid": 2, //timestamp invalid...
-  "BalanceInsufficient": 3, //balance insufficient...
-  "NewConnectionOpening": 4, //address changed...
-  "AddressChanged": 5, //new connection with same address is opening...
-  "ToSelfIsForbidden": 6, //To self is forbidden...
-  "ToNotExist": 7, //To not exist...
+  JsonSchemaInvalid: 0, //json schema invalid...
+  SignatureInvalid: 1, //signature invalid...
+  TimestampInvalid: 2, //timestamp invalid...
+  BalanceInsufficient: 3, //balance insufficient...
+  NewConnectionOpening: 4, //address changed...
+  AddressChanged: 5, //new connection with same address is opening...
+  ToSelfIsForbidden: 6, //To self is forbidden...
+  ToNotExist: 7, //To not exist...
 
-  "GatewayDeclareSuccess": 1000 //gateway declare success...
+  GatewayDeclareSuccess: 1000 //gateway declare success...
 }
 
 const ObjectType = {
-  "Bulletin": 101,
-  "BulletinFile": 102,
+  Bulletin: 101,
+  BulletinFile: 102,
 
-  "PrivateFile": 201,
+  PrivateFile: 201,
 
-  "GroupManage": 301,
-  "GroupMessage": 302,
-  "GroupFile": 303
+  GroupManage: 301,
+  GroupMessage: 302,
+  GroupFile: 303
 }
 
 function strServerMessage(msgCode) {
-  msgJson = { "Action": ActionCode["ServerMessage"], "Code": msgCode }
+  msgJson = { Action: ActionCode.ServerMessage, Code: msgCode }
   return JSON.stringify(msgJson)
 }
 
@@ -193,12 +193,12 @@ function sign(msg, sk) {
 
 function GenBulletinRequest(address, sequence, to) {
   let json = {
-    "Action": ActionCode["BulletinRequest"],
-    "Address": address,
-    "Sequence": sequence,
-    "To": to,
-    "Timestamp": Date.now(),
-    "PublicKey": ServerPublicKey
+    Action: ActionCode.BulletinRequest,
+    Address: address,
+    Sequence: sequence,
+    To: to,
+    Timestamp: Date.now(),
+    PublicKey: ServerPublicKey
   }
   let sig = sign(JSON.stringify(json), ServerPrivateKey)
   json.Signature = sig
@@ -208,9 +208,9 @@ function GenBulletinRequest(address, sequence, to) {
 
 function GenBulletinAddressListResponse(page, address_list) {
   let json = {
-    "Action": ActionCode["BulletinAddressListResponse"],
-    "Page": page,
-    "List": address_list
+    Action: ActionCode.BulletinAddressListResponse,
+    Page: page,
+    List: address_list
   }
   let strJson = JSON.stringify(json)
   return strJson
@@ -218,10 +218,10 @@ function GenBulletinAddressListResponse(page, address_list) {
 
 function GenBulletinReplyListResponse(hash, page, reply_list) {
   let json = {
-    "Action": ActionCode["BulletinReplyListResponse"],
-    "Hash": hash,
-    "Page": page,
-    "List": reply_list
+    Action: ActionCode.BulletinReplyListResponse,
+    Hash: hash,
+    Page: page,
+    List: reply_list
   }
   let strJson = JSON.stringify(json)
   return strJson
@@ -229,11 +229,11 @@ function GenBulletinReplyListResponse(hash, page, reply_list) {
 
 function GenObjectResponse(object, to) {
   let json = {
-    "Action": ActionCode.ObjectResponse,
-    "Object": object,
-    "To": to,
-    "Timestamp": Date.now(),
-    "PublicKey": ServerPublicKey,
+    Action: ActionCode.ObjectResponse,
+    Object: object,
+    To: to,
+    Timestamp: Date.now(),
+    PublicKey: ServerPublicKey,
   }
   let sig = sign(JSON.stringify(json), ServerPrivateKey)
   json.Signature = sig
@@ -244,9 +244,9 @@ function GenObjectResponse(object, to) {
 function GenDeclare() {
   //send declare to server
   let json = {
-    "Action": ActionCode["Declare"],
-    "Timestamp": Date.now(),
-    "PublicKey": ServerPublicKey
+    Action: ActionCode.Declare,
+    Timestamp: Date.now(),
+    PublicKey: ServerPublicKey
   }
   let sig = sign(JSON.stringify(json), ServerPrivateKey)
   json.Signature = sig
@@ -260,10 +260,10 @@ async function CacheBulletin(bulletin) {
   let address = oxoKeyPairs.deriveAddress(bulletin.PublicKey)
 
   let b = await prisma.BULLETINS.findFirst({
-      where: {
-        hash: hash,
-      }
-    })
+    where: {
+      hash: hash,
+    }
+  })
   if (b == null) {
     let result = await prisma.BULLETINS.create({
       data: {
@@ -306,58 +306,228 @@ async function CacheBulletin(bulletin) {
 
       //Brocdcast to OtherServer
       for (let i in OtherServer) {
-        let ws = ClientConns[OtherServer[i]["Address"]]
+        let ws = ClientConns[OtherServer[i].Address]
         if (ws != undefined && ws.readyState == WebSocket.OPEN) {
-          ws.send(GenObjectResponse(bulletin, OtherServer[i]["Address"]))
+          ws.send(GenObjectResponse(bulletin, OtherServer[i].Address))
         }
       }
     }
   }
 }
 
+async function CacheECDH(json) {
+  let address1 = ""
+  let address2 = ""
+  let json1 = ""
+  let json2 = ""
+  let sour_address = oxoKeyPairs.deriveAddress(json.PublicKey)
+  let dest_address = json.To
+  if (sour_address > dest_address) {
+    address1 = sour_address
+    address2 = dest_address
+    json1 = json
+  } else {
+    address1 = dest_address
+    address2 = sour_address
+    json2 = json
+  }
+
+  let dh = await prisma.ECDHS.findFirst({
+    where: {
+      address1: address1,
+      address2: address2,
+      partition: json.Partition,
+      sequence: json.Sequence
+    }
+  })
+  if (dh == null) {
+    if (json1 != "") {
+      await prisma.ECDHS.create({
+        data: {
+          address1: address1,
+          address2: address2,
+          partition: partition,
+          sequence: sequence,
+          json1: json1,
+          json2: ""
+        }
+      })
+    } else if (json2 != "") {
+      await prisma.ECDHS.create({
+        data: {
+          address1: address1,
+          address2: address2,
+          partition: partition,
+          sequence: sequence,
+          json1: "",
+          json2: json2
+        }
+      })
+    }
+  } else {
+    if (json1 != "") {
+      await prisma.ECDHS.update({
+        where: {
+          address1: address1,
+          address2: address2,
+          partition: partition,
+          sequence: sequence
+        },
+        data: {
+          json1: json1
+        },
+      })
+    } else if (json2 != "") {
+      await prisma.ECDHS.update({
+        where: {
+          address1: address1,
+          address2: address2,
+          partition: partition,
+          sequence: sequence
+        },
+        data: {
+          json2: json2
+        },
+      })
+    }
+  }
+}
+
+async function HandelECDHSync(json) {
+  let address1 = ""
+  let address2 = ""
+  let sour_address = oxoKeyPairs.deriveAddress(json.PublicKey)
+  let dest_address = json.To
+  if (sour_address > dest_address) {
+    address1 = sour_address
+    address2 = dest_address
+  } else {
+    address1 = dest_address
+    address2 = sour_address
+  }
+
+  let dh = await prisma.ECDHS.findFirst({
+    where: {
+      address1: address1,
+      address2: address2,
+      partition: json.Partition,
+      sequence: json.Sequence
+    },
+    select: {
+      json1: true,
+      json2: true
+    }
+  })
+  if (dh != null) {
+    if (address1 == sour_address && dh.json2 != "") {
+      ClientConns[sour_address].send(`${dh.json2}`)
+    } else if (address2 == sour_address && dh.json1 != "") {
+      ClientConns[sour_address].send(`${dh.json1}`)
+    }
+  }
+}
+
+async function CacheMessage(json) {
+  let hash = quarterSHA512(JSON.stringify(bulletin))
+  let sour_address = oxoKeyPairs.deriveAddress(json.PublicKey)
+  let dest_address = json.To
+  let msg = await prisma.BULLETINS.findFirst({
+    where: {
+      hash: hash
+    }
+  })
+  if (msg == null) {
+    await prisma.BULLETINS.create({
+      data: {
+        hash: hash,
+        sour_address: sour_address,
+        dest_address: dest_address,
+        sequence: json.Sequence,
+        signed_at: json.Timestamp,
+        json: JSON.stringify(json)
+      }
+    })
+  }
+}
+
+async function HandelChatSync(json) {
+  let dest_address = oxoKeyPairs.deriveAddress(json.PublicKey)
+  let msg_list = await prisma.MESSAGES.findMany({
+    where: {
+      sour_address: json.To,
+      dest_address: dest_address,
+      sequence: {
+        gt: json.CurrentSequence
+      }
+    },
+    select: {
+      json: true
+    },
+    orderBy: {
+      sequence: "asc"
+    }
+  })
+  msg_list.forEach(msg => {
+    ClientConns[dest_address].send(`${msg.json}`)
+  })
+}
+
 async function handleClientMessage(message, json) {
-  if (json["To"] != null && ClientConns[json["To"]] != null && ClientConns[json["To"]].readyState == WebSocket.OPEN) {
-    //forward message
-    ClientConns[json["To"]].send(`${message}`)
+  if (json.To != null) {
+    if (ClientConns[json.To] != null && ClientConns[json.To].readyState == WebSocket.OPEN) {
+      // 對方在綫
+      //forward message
+      ClientConns[json.To].send(`${message}`)
+    }
+
+    if (json.Action == ActionCode.ChatMessage) {
+      CacheMessage(json)
+    } else if (json.Action == ActionCode.ChatSync) {
+      HandelChatSync(json)
+    } else if (json.Action == ActionCode.ChatDH) {
+      CacheECDH(json)
+      HandelECDHSync(json)
+    }
+
 
     //cache bulletin
-    if (json["Action"] == ActionCode["ObjectResponse"] && json["Object"]["ObjectType"] == ObjectType["Bulletin"]) {
-      CacheBulletin(json["Object"])
+    if (json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.Bulletin) {
+      CacheBulletin(json.Object)
     }
   }
 
-  if (json["Action"] == ActionCode["BulletinRequest"]) {
+  if (json.Action == ActionCode.BulletinRequest) {
     //send cache bulletin
     let bulletin = await prisma.BULLETINS.findFirst({
       where: {
-        address: json["Address"],
-        sequence: json["Sequence"]
+        address: json.Address,
+        sequence: json.Sequence
       },
       select: {
         json: true
       }
     })
     if (bulletin != null) {
-      let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
+      let address = oxoKeyPairs.deriveAddress(json.PublicKey)
       ClientConns[address].send(bulletin.json)
     }
-  } else if (json["Action"] == ActionCode["BulletinRandom"]) {
+  } else if (json.Action == ActionCode.BulletinRandom) {
     //send random bulletin
     let bulletin = await prisma.$queryRaw`SELECT * FROM "public"."BULLETINS" ORDER BY RANDOM() LIMIT 1`
     if (bulletin != null) {
-      let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
+      let address = oxoKeyPairs.deriveAddress(json.PublicKey)
       ClientConns[address].send(bulletin[0].json)
     }
-  } else if (json["To"] == ServerAddress && json["Action"] == ActionCode["ObjectResponse"] && json["Object"]["ObjectType"] == ObjectType["Bulletin"]) {
-    CacheBulletin(json["Object"])
+  } else if (json.To == ServerAddress && json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.Bulletin) {
+    CacheBulletin(json.Object)
     //fetch more bulletin
-    let address = oxoKeyPairs.deriveAddress(json["Object"].PublicKey)
+    let address = oxoKeyPairs.deriveAddress(json.Object.PublicKey)
     if (ClientConns[address] != null && ClientConns[address].readyState == WebSocket.OPEN) {
-      let msg = GenBulletinRequest(address, json["Object"].Sequence + 1, address)
+      let msg = GenBulletinRequest(address, json.Object.Sequence + 1, address)
       ClientConns[address].send(msg)
     }
-  } else if (json["Action"] == ActionCode["BulletinAddressListRequest"] && json["Page"] > 0) {
-    let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
+  } else if (json.Action == ActionCode.BulletinAddressListRequest && json.Page > 0) {
+    let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     let result = await prisma.BULLETINS.groupBy({
       by: "address",
       _count: {
@@ -368,23 +538,23 @@ async function handleClientMessage(message, json) {
           address: "desc",
         },
       },
-      skip: (json["Page"] - 1) * PageSize,
+      skip: (json.Page - 1) * PageSize,
       take: PageSize,
     })
     let address_list = []
     result.forEach(item => {
       let new_item = {}
-      new_item["Address"] = item.address
-      new_item["Count"] = item._count.address
+      new_item.Address = item.address
+      new_item.Count = item._count.address
       address_list.push(new_item)
     })
-    let msg = GenBulletinAddressListResponse(json["Page"], address_list)
+    let msg = GenBulletinAddressListResponse(json.Page, address_list)
     ClientConns[address].send(msg)
-  } else if (json["Action"] == ActionCode["BulletinReplyListRequest"] && json["Page"] > 0) {
-    let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
+  } else if (json.Action == ActionCode.BulletinReplyListRequest && json.Page > 0) {
+    let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     let result = await prisma.QUOTES.findMany({
       where: {
-        main_hash: json["Hash"]
+        main_hash: json.Hash
       },
       select: {
         quote_hash: true,
@@ -393,7 +563,7 @@ async function handleClientMessage(message, json) {
         content: true,
         signed_at: true
       },
-      skip: (json["Page"] - 1) * PageSize,
+      skip: (json.Page - 1) * PageSize,
       take: PageSize,
       orderBy: {
         signed_at: "desc"
@@ -402,14 +572,14 @@ async function handleClientMessage(message, json) {
     let reply_list = []
     result.forEach(item => {
       let new_item = {}
-      new_item["Address"] = item["address"]
-      new_item["Sequence"] = item["sequence"]
-      new_item["Hash"] = item["quote_hash"]
-      new_item["Content"] = item["content"]
-      new_item["Timestamp"] = Number(item["signed_at"])
+      new_item.Address = item.address
+      new_item.Sequence = item.sequence
+      new_item.Hash = item.quote_hash
+      new_item.Content = item.content
+      new_item.Timestamp = Number(item.signed_at)
       reply_list.push(new_item)
     })
-    let msg = GenBulletinReplyListResponse(json["Hash"], json["Page"], reply_list)
+    let msg = GenBulletinReplyListResponse(json.Hash, json.Page, reply_list)
     ClientConns[address].send(msg)
   }
 }
@@ -420,11 +590,11 @@ async function checkClientMessage(ws, message) {
   let json = Schema.checkClientSchema(message)
   if (json == false) {
     //json格式不合法
-    sendServerMessage(ws, MessageCode["JsonSchemaInvalid"])
+    sendServerMessage(ws, MessageCode.JsonSchemaInvalid)
     // console.log(`json格式不合法`)
     teminateClientConn(ws)
   } else {
-    let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
+    let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     if (ClientConns[address] == ws) {
       //连接已经通过"声明消息"校验过签名
       handleClientMessage(message, json)
@@ -432,19 +602,19 @@ async function checkClientMessage(ws, message) {
       let connAddress = fetchClientConnAddress(ws)
       if (connAddress != null && connAddress != address) {
         //using different address in same connection
-        sendServerMessage(ws, MessageCode["AddressChanged"])
+        sendServerMessage(ws, MessageCode.AddressChanged)
         teminateClientConn(ws)
       } else {
         if (!VerifyJsonSignature(json)) {
           //"声明消息"签名不合法
-          sendServerMessage(ws, MessageCode["SignatureInvalid"])
+          sendServerMessage(ws, MessageCode.SignatureInvalid)
           teminateClientConn(ws)
           return
         }
 
         if (json.Timestamp + 60000 < Date.now()) {
           //"声明消息"生成时间过早
-          sendServerMessage(ws, MessageCode["TimestampInvalid"])
+          sendServerMessage(ws, MessageCode.TimestampInvalid)
           teminateClientConn(ws)
           return
         }
@@ -475,7 +645,7 @@ async function checkClientMessage(ws, message) {
         } else if (ClientConns[address] != ws && ClientConns[address].readyState == WebSocket.OPEN) {
           //new connection kick old conection with same address
           //当前地址有对应连接，断开旧连接，当前地址对应到当前连接
-          sendServerMessage(ClientConns[address], MessageCode["NewConnectionOpening"])
+          sendServerMessage(ClientConns[address], MessageCode.NewConnectionOpening)
           ClientConns[address].close()
           ClientConns[address] = ws
           //handleClientMessage(message, json)
@@ -517,7 +687,7 @@ startClientServer()
 function keepOtherServerConn() {
   let notConnected = []
   for (let i in OtherServer) {
-    if (ClientConns[OtherServer[i]["Address"]] == undefined) {
+    if (ClientConns[OtherServer[i].Address] == undefined) {
       notConnected.push(OtherServer[i])
     }
   }
@@ -527,7 +697,7 @@ function keepOtherServerConn() {
   }
 
   let random = Math.floor(Math.random() * (notConnected.length))
-  let randomServerUrl = notConnected[random]["URL"]
+  let randomServerUrl = notConnected[random].URL
   if (randomServerUrl != null) {
     console.log(`keepOtherServerConn connecting to StaticCounter ${randomServerUrl}`)
     try {
@@ -535,7 +705,7 @@ function keepOtherServerConn() {
 
       ws.on("open", function open() {
         ws.send(GenDeclare())
-        ClientConns[notConnected[random]["Address"]] = ws
+        ClientConns[notConnected[random].Address] = ws
       })
 
       ws.on("message", function incoming(message) {
