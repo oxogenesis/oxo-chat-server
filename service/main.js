@@ -283,14 +283,14 @@ async function CacheBulletin(bulletin) {
       //update pre_bulletin's next_hash
       result = await prisma.BULLETINS.update({
         where: {
-          hash: bulletin.PreHash,
+          hash: bulletin.PreHash
         },
         data: {
-          next_hash: hash,
-        },
+          next_hash: hash
+        }
       })
 
-      //update quote
+      //create quote
       bulletin.Quote.forEach(async quote => {
         result = await prisma.QUOTES.create({
           data: {
@@ -325,11 +325,11 @@ async function CacheECDH(json) {
   if (sour_address > dest_address) {
     address1 = sour_address
     address2 = dest_address
-    json1 = json
+    json1 = JSON.stringify(json)
   } else {
     address1 = dest_address
     address2 = sour_address
-    json2 = json
+    json2 = JSON.stringify(json)
   }
 
   let dh = await prisma.ECDHS.findFirst({
@@ -346,8 +346,8 @@ async function CacheECDH(json) {
         data: {
           address1: address1,
           address2: address2,
-          partition: partition,
-          sequence: sequence,
+          partition: json.Partition,
+          sequence: json.Sequence,
           json1: json1,
           json2: ""
         }
@@ -357,8 +357,8 @@ async function CacheECDH(json) {
         data: {
           address1: address1,
           address2: address2,
-          partition: partition,
-          sequence: sequence,
+          partition: json.Partition,
+          sequence: json.Sequence,
           json1: "",
           json2: json2
         }
@@ -368,26 +368,30 @@ async function CacheECDH(json) {
     if (json1 != "") {
       await prisma.ECDHS.update({
         where: {
-          address1: address1,
-          address2: address2,
-          partition: partition,
-          sequence: sequence
+          address1_address2_partition_sequence: {
+            address1: address1,
+            address2: address2,
+            partition: json.Partition,
+            sequence: json.Sequence
+          }
         },
         data: {
           json1: json1
-        },
+        }
       })
     } else if (json2 != "") {
       await prisma.ECDHS.update({
         where: {
-          address1: address1,
-          address2: address2,
-          partition: partition,
-          sequence: sequence
+          address1_address2_partition_sequence: {
+            address1: address1,
+            address2: address2,
+            partition: json.Partition,
+            sequence: json.Sequence
+          }
         },
         data: {
           json2: json2
-        },
+        }
       })
     }
   }
