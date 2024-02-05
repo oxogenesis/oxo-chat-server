@@ -422,7 +422,9 @@ async function HandelECDHSync(json) {
       json2: true
     }
   })
-  if (dh != null) {
+  if (dh != null && json.Pair != "") {
+    // dh存在 对方握手消息已记录
+    // 我未完成握手
     if (address1 == sour_address && dh.json2 != "") {
       ClientConns[sour_address].send(`${dh.json2}`)
     } else if (address2 == sour_address && dh.json1 != "") {
