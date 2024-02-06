@@ -437,13 +437,13 @@ async function CacheMessage(json) {
   let hash = quarterSHA512(JSON.stringify(bulletin))
   let sour_address = oxoKeyPairs.deriveAddress(json.PublicKey)
   let dest_address = json.To
-  let msg = await prisma.BULLETINS.findFirst({
+  let msg = await prisma.MESSAGES.findFirst({
     where: {
       hash: hash
     }
   })
   if (msg == null) {
-    await prisma.BULLETINS.create({
+    await prisma.MESSAGES.create({
       data: {
         hash: hash,
         sour_address: sour_address,
