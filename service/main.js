@@ -434,8 +434,8 @@ async function HandelECDHSync(json) {
 }
 
 async function CacheMessage(json) {
-  let msg = JSON.stringify(json)
-  let hash = quarterSHA512(msg)
+  let str_json = JSON.stringify(json)
+  let hash = quarterSHA512(str_json)
   let sour_address = oxoKeyPairs.deriveAddress(json.PublicKey)
   let dest_address = json.To
   let msg = await prisma.MESSAGES.findFirst({
@@ -451,7 +451,7 @@ async function CacheMessage(json) {
         dest_address: dest_address,
         sequence: json.Sequence,
         signed_at: json.Timestamp,
-        json: msg
+        json: str_json
       }
     })
   }
