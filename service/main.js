@@ -106,6 +106,7 @@ let ActionCode = {
   ChatMessage: 302,
   ChatSync: 303,
   PrivateFileRequest: 304,
+  ChatSyncFromServer: 305,
 
   GroupRequest: 401,
   GroupManageSync: 402,
@@ -232,6 +233,20 @@ function GenObjectResponse(object, to) {
     Action: ActionCode.ObjectResponse,
     Object: object,
     To: to,
+    Timestamp: Date.now(),
+    PublicKey: ServerPublicKey,
+  }
+  let sig = sign(JSON.stringify(json), ServerPrivateKey)
+  json.Signature = sig
+  let strJson = JSON.stringify(json)
+  return strJson
+}
+
+function GenChatSync(pair_address, current_sequence) {
+  let json = {
+    Action: ActionCode.ChatSyncFromServer,
+    PairAddress: pair_address,
+    CurrentSequence: current_sequence,
     Timestamp: Date.now(),
     PublicKey: ServerPublicKey,
   }
@@ -438,12 +453,23 @@ async function CacheMessage(json) {
   let hash = quarterSHA512(str_json)
   let sour_address = oxoKeyPairs.deriveAddress(json.PublicKey)
   let dest_address = json.To
-  let msg = await prisma.MESSAGES.findFirst({
+  let msg_list = await prisma.MESSAGES.findMany({
     where: {
-      hash: hash
+      sour_address: sour_address,
+      dest_address: dest_address,
+      sequence: {
+        lt: json.Sequence
+      }
+    },
+    orderBy: {
+      sequence: asc
+    },
+    select: {
+      sequence: true
     }
   })
-  if (msg == null) {
+  let msg_list_length = msg_list.length
+  if ((msg_list_length == 0 && json.Sequence == 1 && json.PreHash == GenesisHash) || (msg_list_length == msg_list[msg_list_length - 1].sequence && json.Sequence == msg_list_length + 1 && json.PreHash == msg_list[msg_list_length - 1].hash)) {
     await prisma.MESSAGES.create({
       data: {
         hash: hash,
@@ -454,6 +480,13 @@ async function CacheMessage(json) {
         json: str_json
       }
     })
+  } else {
+    let current_sequence = 0
+    if (msg_list_length != 0) {
+      current_sequence = msg_list_length
+    }
+    let msg = GenChatSync(dest_address, current_sequence)
+    ClientConns[sour_address].send(`${msg}`)
   }
 }
 
@@ -603,7 +636,11 @@ async function checkClientMessage(ws, message) {
   } else {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     if (ClientConns[address] == ws) {
-      //连接已经通过"声明消息"校验过签名
+      // 连接已经通过"声明消息"校验过签名
+      // "声明消息"之外的其他消息，由接收方校验
+      // 伪造的"公告消息"无法通过接收方校验，也就无法被接受方看见（进而不能被引用），也就不具备传播能力
+      // 伪造的"消息"无法通过接收方校验，也就无法被接受方看见
+      // 所以服务器端只校验"声明消息"签名的有效性，并与之建立连接，后续消息无需校验签名，降低服务器运算压力
       handleClientMessage(message, json)
     } else {
       let connAddress = fetchClientConnAddress(ws)
