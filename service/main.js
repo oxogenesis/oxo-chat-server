@@ -462,7 +462,7 @@ async function CacheMessage(json) {
       }
     },
     orderBy: {
-      sequence: asc
+      sequence: "asc"
     },
     select: {
       sequence: true
