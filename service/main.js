@@ -53,6 +53,10 @@ function quarterSHA512(str) {
 
 //oxo
 
+//const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
+const GenesisAddress = 'obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf'
+const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
+
 function strToHex(str) {
   let arr = []
   let length = str.length
