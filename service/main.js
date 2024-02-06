@@ -57,6 +57,12 @@ function quarterSHA512(str) {
 const GenesisAddress = 'obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf'
 const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
 
+function DelayExec(ms) {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms)
+  })
+}
+
 function strToHex(str) {
   let arr = []
   let length = str.length
@@ -512,9 +518,13 @@ async function HandelChatSync(json) {
       sequence: "asc"
     }
   })
-  msg_list.forEach(msg => {
+  let msg_list_length = msg_list.length
+  let s = 0
+  for (let i = 0; i < msg_list_length; i++) {
+    DelayExec(s * 1000)
     ClientConns[dest_address].send(`${msg.json}`)
-  })
+    s = s + 1
+  }
 }
 
 async function handleClientMessage(message, json) {
