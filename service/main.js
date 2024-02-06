@@ -36,6 +36,7 @@ const WebSocket = require("ws")
 
 //crypto
 const Crypto = require("crypto")
+const { setTimeout } = require("timers/promises")
 
 function hasherSHA512(str) {
   let sha512 = Crypto.createHash("sha512")
@@ -56,12 +57,6 @@ function quarterSHA512(str) {
 //const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
 const GenesisAddress = 'obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf'
 const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
-
-function DelayExec(ms) {
-  return new Promise(resolve => {
-    setTimeout(resolve, ms)
-  })
-}
 
 function strToHex(str) {
   let arr = []
@@ -521,8 +516,9 @@ async function HandelChatSync(json) {
   let msg_list_length = msg_list.length
   let s = 0
   for (let i = 0; i < msg_list_length; i++) {
-    DelayExec(s * 1000)
-    ClientConns[dest_address].send(`${msg_list[i].json}`)
+    setTimeout(function () {
+      ClientConns[dest_address].send(`${msg_list[i].json}`)
+    }, s * 1000)
     s = s + 1
   }
 }
