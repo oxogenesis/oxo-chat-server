@@ -36,7 +36,6 @@ const WebSocket = require("ws")
 
 //crypto
 const Crypto = require("crypto")
-const { setTimeout } = require("timers/promises")
 
 function hasherSHA512(str) {
   let sha512 = Crypto.createHash("sha512")
@@ -57,6 +56,12 @@ function quarterSHA512(str) {
 //const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
 const GenesisAddress = 'obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf'
 const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
+
+async function DelayExec(ms) {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms)
+  })
+}
 
 function strToHex(str) {
   let arr = []
@@ -496,12 +501,6 @@ async function CacheMessage(json) {
   }
 }
 
-async function DelayExec(ms) {
-  return new Promise(resolve => {
-    setTimeout(resolve, ms)
-  })
-}
-
 async function HandelChatSync(json) {
   let dest_address = oxoKeyPairs.deriveAddress(json.PublicKey)
   let msg_list = await prisma.MESSAGES.findMany({
@@ -521,9 +520,7 @@ async function HandelChatSync(json) {
   })
   let msg_list_length = msg_list.length
   for (let i = 0; i < msg_list_length; i++) {
-    console.log("before await", i)
     await DelayExec(1000)
-    console.log("after await", i)
     ClientConns[dest_address].send(`${msg_list[i].json}`)
   }
 }
