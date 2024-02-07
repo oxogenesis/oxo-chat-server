@@ -496,6 +496,12 @@ async function CacheMessage(json) {
   }
 }
 
+function DelaySend(ws, msg, time) {
+  setTimeout(() => {
+    ws.send(`${msg}`)
+  }, time)
+}
+
 async function HandelChatSync(json) {
   let dest_address = oxoKeyPairs.deriveAddress(json.PublicKey)
   let msg_list = await prisma.MESSAGES.findMany({
@@ -516,9 +522,7 @@ async function HandelChatSync(json) {
   let msg_list_length = msg_list.length
   let s = 0
   for (let i = 0; i < msg_list_length; i++) {
-    setTimeout(function () {
-      ClientConns[dest_address].send(`${msg_list[i].json}`)
-    }, s * 1000)
+    DelaySend(ClientConns[dest_address], msg_list[i].json, s * 1000)
     s = s + 1
   }
 }
