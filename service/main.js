@@ -496,7 +496,11 @@ async function CacheMessage(json) {
   }
 }
 
-const DelayExec = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+function DelayExec(ms) {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms)
+  })
+}
 
 async function HandelChatSync(json) {
   let dest_address = oxoKeyPairs.deriveAddress(json.PublicKey)
