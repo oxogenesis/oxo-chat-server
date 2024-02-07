@@ -496,11 +496,7 @@ async function CacheMessage(json) {
   }
 }
 
-function DelaySend(ws, msg, time) {
-  setTimeout(() => {
-    ws.send(`${msg}`)
-  }, time)
-}
+const DelayExec = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 async function HandelChatSync(json) {
   let dest_address = oxoKeyPairs.deriveAddress(json.PublicKey)
@@ -520,10 +516,9 @@ async function HandelChatSync(json) {
     }
   })
   let msg_list_length = msg_list.length
-  let s = 0
   for (let i = 0; i < msg_list_length; i++) {
-    DelaySend(ClientConns[dest_address], msg_list[i].json, s * 1000)
-    s = s + 1
+    await DelayExec(1000)
+    ClientConns[dest_address].send(`${msg_list[i].json}`, 1000)
   }
 }
 
