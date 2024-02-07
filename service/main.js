@@ -518,7 +518,8 @@ async function HandelChatSync(json) {
   let msg_list_length = msg_list.length
   for (let i = 0; i < msg_list_length; i++) {
     await DelayExec(1000)
-    ClientConns[dest_address].send(`${msg_list[i].json}`, 1000)
+    console.log(i)
+    ClientConns[dest_address].send(`${msg_list[i].json}`)
   }
 }
 
