@@ -496,7 +496,7 @@ async function CacheMessage(json) {
   }
 }
 
-function DelayExec(ms) {
+async function DelayExec(ms) {
   return new Promise(resolve => {
     setTimeout(resolve, ms)
   })
