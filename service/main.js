@@ -390,7 +390,7 @@ async function CacheBulletin(bulletin) {
             hash: file.Hash
           }
         })
-        if (f == null) {
+        if (!f) {
           let chunk_length = Math.ceil(file.Size / FileChunkSize)
           f = await prisma.FILES.create({
             data: {
@@ -403,8 +403,8 @@ async function CacheBulletin(bulletin) {
             }
           })
         }
-        if (file.chunk_cursor < file.chunk_length) {
-          let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address)
+        if (f.chunk_cursor < f.chunk_length) {
+          let msg = GenBulletinFileChunkRequest(f.hash, f.chunk_cursor + 1, address)
           ClientConns[address].send(msg)
         }
       })
@@ -889,13 +889,14 @@ async function checkClientMessage(ws, message) {
                 hash: {
                   in: file_hash_list
                 },
+                // TODO
                 chunk_length: {
                   gt: prisma.FILES.chunk_cursor
                 }
               }
             }
           })
-          // console.log('file_list', file_list)
+          console.log('file_list', file_list)
           file_list.forEach(async file => {
             if (file.chunk_cursor < file.chunk_length) {
               let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address)
