@@ -96,18 +96,18 @@ let BulletinRequestSchema = {
   }
 }
 
-let FileRequestSchema = {
+let FileChunkRequestSchema = {
   "type": "object",
-  "required": ["Action", "SHA1", "CurrentChunk", "To", "Timestamp", "PublicKey", "Signature"],
+  "required": ["Action", "Hash", "Cursor", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 7,
   "properties": {
     "Action": {
       "type": "number"
     },
-    "SHA1": {
+    "Hash": {
       "type": "string"
     },
-    "CurrentChunk": {
+    "Cursor": {
       "type": "number"
     },
     "To": {
@@ -415,7 +415,7 @@ var vObjectResponseSchema = ajv.compile(ObjectResponseSchema)
 
 var vBulletinRandomSchema = ajv.compile(BulletinRandomSchema)
 var vBulletinRequestSchema = ajv.compile(BulletinRequestSchema)
-var vFileRequestSchema = ajv.compile(FileRequestSchema)
+var vFileChunkRequestSchema = ajv.compile(FileChunkRequestSchema)
 var vBulletinAddressListRequestSchema = ajv.compile(BulletinAddressListRequestSchema)
 var vBulletinReplyListRequestSchema = ajv.compile(BulletinReplyListRequestSchema)
 
@@ -431,7 +431,7 @@ var vGroupRequestSchema = ajv.compile(GroupRequestSchema)
 function checkClientSchema(strJson) {
   try {
     let json = JSON.parse(strJson)
-    if (vObjectResponseSchema(json) || vBulletinRandomSchema(json) || vBulletinRequestSchema(json) || vFileRequestSchema(json) || vBulletinAddressListRequestSchema(json) || vBulletinReplyListRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupRequestSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json)) {
+    if (vObjectResponseSchema(json) || vBulletinRandomSchema(json) || vBulletinRequestSchema(json) || vFileChunkRequestSchema(json) || vBulletinAddressListRequestSchema(json) || vBulletinReplyListRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupRequestSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json)) {
       return json
     } else {
       return false

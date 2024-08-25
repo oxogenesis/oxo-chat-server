@@ -15,11 +15,12 @@ model BULLETINS {
   address    String
   sequence   Int
   content    String
-  quote      String
+  quote      String?
+  file       String?
   json       String
   signed_at  BigInt
   created_at BigInt
-  pre_hash   String?
+  pre_hash   String
   next_hash  String?
 }
 
@@ -34,13 +35,22 @@ model QUOTES {
   @@id([main_hash, quote_hash])
 }
 
+model FILES {
+  hash         String  @id
+  name         String
+  ext          String
+  size         Int
+  chunk_length Int
+  chunk_cursor Int
+}
+
 model ECDHS {
   address1  String
   address2  String
   partition Int
   sequence  Int
-  json1     String
-  json2     String
+  json1     String?
+  json2     String?
 
   @@id([address1, address2, partition, sequence])
 }

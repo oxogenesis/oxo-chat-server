@@ -1,3 +1,5 @@
+const fs = require('fs')
+const path = require('path')
 const { PrismaClient } = require("@prisma/client")
 
 const prisma = new PrismaClient()
@@ -44,11 +46,25 @@ function hasherSHA512(str) {
 }
 
 function halfSHA512(str) {
-  return hasherSHA512(str).toUpperCase().substr(0, 64)
+  return hasherSHA512(str).toUpperCase().substring(0, 64)
 }
 
 function quarterSHA512(str) {
-  return hasherSHA512(str).toUpperCase().substr(0, 32);
+  return hasherSHA512(str).toUpperCase().substring(0, 32);
+}
+
+function genFileHashSync(file_path) {
+  let file_content
+  try {
+    file_content = fs.readFileSync(file_path)
+  } catch (err) {
+    console.error(err)
+    return null
+  }
+
+  const sha1 = Crypto.createHash('sha1')
+  sha1.update(file_content)
+  return sha1.digest('hex').toUpperCase()
 }
 
 //oxo
@@ -57,10 +73,22 @@ function quarterSHA512(str) {
 const GenesisAddress = 'obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf'
 const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
 
+const FileMaxSize = 16 * 1024 * 1024
+const FileChunkSize = 64 * 1024
+const BulletinFileExtRegex = /jpg|png|jpeg|txt|md/i
+
 async function DelayExec(ms) {
   return new Promise(resolve => {
     setTimeout(resolve, ms)
   })
+}
+
+function Array2Str(array) {
+  let tmpArray = []
+  for (let i = array.length - 1; i >= 0; i--) {
+    tmpArray.push(`"${array[i]}"`)
+  }
+  return tmpArray.join(',')
 }
 
 function strToHex(str) {
@@ -106,7 +134,7 @@ let ActionCode = {
 
   BulletinRandom: 200,
   BulletinRequest: 201,
-  BulletinFileRequest: 202,
+  BulletinFileChunkRequest: 202,
   BulletinAddressListRequest: 203,
   BulletinAddressListResponse: 204,
   BulletinReplyListRequest: 205,
@@ -141,7 +169,7 @@ const MessageCode = {
 
 const ObjectType = {
   Bulletin: 101,
-  BulletinFile: 102,
+  BulletinFileChunk: 102,
 
   PrivateFile: 201,
 
@@ -217,6 +245,31 @@ function GenBulletinRequest(address, sequence, to) {
   return strJson
 }
 
+function GenBulletinFileChunkRequest(hash, chunk_cursor, to) {
+  let json = {
+    Action: ActionCode.BulletinFileChunkRequest,
+    Hash: hash,
+    Cursor: chunk_cursor,
+    To: to,
+    Timestamp: Date.now(),
+    PublicKey: ServerPublicKey
+  }
+  let sig = sign(JSON.stringify(json), ServerPrivateKey)
+  json.Signature = sig
+  let strJson = JSON.stringify(json)
+  return strJson
+}
+
+function GenBulletinFileChunkJson(hash, chunk_cursor, content) {
+  let json = {
+    "ObjectType": ObjectType.BulletinFileChunk,
+    "Hash": hash,
+    "Cursor": chunk_cursor,
+    "Content": content
+  }
+  return json
+}
+
 function GenBulletinAddressListResponse(page, address_list) {
   let json = {
     Action: ActionCode.BulletinAddressListResponse,
@@ -286,7 +339,7 @@ async function CacheBulletin(bulletin) {
 
   let b = await prisma.BULLETINS.findFirst({
     where: {
-      hash: hash,
+      hash: hash
     }
   })
   if (b == null) {
@@ -298,13 +351,14 @@ async function CacheBulletin(bulletin) {
         sequence: bulletin.Sequence,
         content: bulletin.Content,
         quote: JSON.stringify(bulletin.Quote),
+        file: JSON.stringify(bulletin.File),
         json: JSON.stringify(bulletin),
         signed_at: bulletin.Timestamp,
         created_at: timestamp
       }
     })
 
-    if (result) {
+    if (result && result.sequence != 1) {
       //update pre_bulletin's next_hash
       result = await prisma.BULLETINS.update({
         where: {
@@ -327,6 +381,32 @@ async function CacheBulletin(bulletin) {
             signed_at: bulletin.Timestamp
           }
         })
+      })
+
+      //create file
+      bulletin.File.forEach(async file => {
+        let f = await prisma.FILES.findFirst({
+          where: {
+            hash: file.Hash
+          }
+        })
+        if (f == null) {
+          let chunk_length = Math.ceil(file.Size / FileChunkSize)
+          f = await prisma.FILES.create({
+            data: {
+              hash: file.Hash,
+              name: file.Name,
+              ext: file.Ext,
+              size: file.Size,
+              chunk_length: chunk_length,
+              chunk_cursor: 0
+            }
+          })
+        }
+        if (file.chunk_cursor < file.chunk_length) {
+          let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address)
+          ClientConns[address].send(msg)
+        }
       })
 
       //Brocdcast to OtherServer
@@ -542,10 +622,67 @@ async function handleClientMessage(message, json) {
       HandelECDHSync(json)
     }
 
-
-    //cache bulletin
-    if (json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.Bulletin) {
-      CacheBulletin(json.Object)
+    if (json.Action == ActionCode.ObjectResponse) {
+      if (json.Object.ObjectType == ObjectType.Bulletin) {
+        //cache bulletin
+        CacheBulletin(json.Object)
+        if (json.To == ServerAddress) {
+          //fetch more bulletin
+          let address = oxoKeyPairs.deriveAddress(json.Object.PublicKey)
+          if (ClientConns[address] != null && ClientConns[address].readyState == WebSocket.OPEN) {
+            let msg = GenBulletinRequest(address, json.Object.Sequence + 1, address)
+            ClientConns[address].send(msg)
+          }
+        }
+      } else if (json.Object.ObjectType == ObjectType.BulletinFileChunk) {
+        //cache bulletin file
+        console.log(`BulletinFileChunk........................................`)
+        let bulletin_file = await prisma.FILES.findFirst({
+          where: {
+            hash: json.Object.Hash
+          },
+          select: {
+            size: true,
+            chunk_length: true,
+            chunk_cursor: true
+          }
+        })
+        let file_dir = `./BulletinFile/${json.Object.Hash.substring(0, 3)}/${json.Object.Hash.substring(3, 6)}`
+        let file_path = `${file_dir}/${json.Object.Hash}`
+        fs.mkdirSync(path.resolve(file_dir), { recursive: true })
+        if (bulletin_file.chunk_cursor < bulletin_file.chunk_length) {
+          const utf8_buffer = Buffer.from(json.Object.Content, 'base64')
+          fs.appendFileSync(path.resolve(file_path), utf8_buffer)
+          let current_chunk_cursor = bulletin_file.chunk_cursor + 1
+          await prisma.FILES.update({
+            where: {
+              hash: json.Object.Hash
+            },
+            data: {
+              chunk_cursor: current_chunk_cursor
+            }
+          })
+          if (current_chunk_cursor < bulletin_file.chunk_length) {
+            let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+            let msg = GenBulletinFileChunkRequest(json.Object.Hash, current_chunk_cursor + 1, address)
+            ClientConns[address].send(msg)
+          } else {
+            // compare hash
+            let hash = genFileHashSync(path.resolve(file_path))
+            if (hash != json.Object.Hash) {
+              fs.rmSync(path.resolve(file_path))
+              await prisma.FILES.update({
+                where: {
+                  hash: json.Object.Hash
+                },
+                data: {
+                  chunk_cursor: 0
+                }
+              })
+            }
+          }
+        }
+      }
     }
   }
 
@@ -564,20 +701,48 @@ async function handleClientMessage(message, json) {
       let address = oxoKeyPairs.deriveAddress(json.PublicKey)
       ClientConns[address].send(bulletin.json)
     }
+  } else if (json.Action == ActionCode.BulletinFileChunkRequest) {
+    let file = await prisma.FILES.findFirst({
+      where: {
+        hash: json.Hash
+      },
+      select: {
+        size: true,
+        chunk_cursor: true,
+        chunk_length: true
+      }
+    })
+    if (file != null) {
+      if (file.chunk_cursor == file.chunk_length) {
+        //send cache bulletin file
+        let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+
+        let begin = (json.Cursor - 1) * FileChunkSize
+        let left_size = file.size - begin
+        let end = json.Cursor * FileChunkSize
+        if (left_size < FileChunkSize) {
+          end = begin + left_size
+        }
+        let file_path = path.resolve(`./BulletinFile/${json.Hash.substring(0, 3)}/${json.Hash.substring(3, 6)}/${json.Hash}`)
+        let buffer = fs.readFileSync(file_path)
+        let chunk = buffer.subarray(begin, end)
+        // base64
+        let content = chunk.toString('base64')
+        let object = GenBulletinFileChunkJson(json.Hash, json.Cursor, content)
+        let msg = GenObjectResponse(object, address)
+        ClientConns[address].send(msg)
+      } else if (json.To != "" && ClientConns[json.To]) {
+        // fetch file
+        let msg = GenBulletinFileChunkRequest(json.Hash, file.chunk_cursor + 1, json.To)
+        ClientConns[json.To].send(msg)
+      }
+    }
   } else if (json.Action == ActionCode.BulletinRandom) {
     //send random bulletin
     let bulletin = await prisma.$queryRaw`SELECT * FROM "public"."BULLETINS" ORDER BY RANDOM() LIMIT 1`
     if (bulletin != null) {
       let address = oxoKeyPairs.deriveAddress(json.PublicKey)
       ClientConns[address].send(bulletin[0].json)
-    }
-  } else if (json.To == ServerAddress && json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.Bulletin) {
-    CacheBulletin(json.Object)
-    //fetch more bulletin
-    let address = oxoKeyPairs.deriveAddress(json.Object.PublicKey)
-    if (ClientConns[address] != null && ClientConns[address].readyState == WebSocket.OPEN) {
-      let msg = GenBulletinRequest(address, json.Object.Sequence + 1, address)
-      ClientConns[address].send(msg)
     }
   } else if (json.Action == ActionCode.BulletinAddressListRequest && json.Page > 0) {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
@@ -639,7 +804,7 @@ async function handleClientMessage(message, json) {
 
 async function checkClientMessage(ws, message) {
   console.log(`###################LOG################### Client Message:`)
-  console.log(`${message}`)
+  console.log(`${message.slice(0, 512)}`)
   let json = Schema.checkClientSchema(message)
   if (json == false) {
     //json格式不合法
@@ -682,6 +847,8 @@ async function checkClientMessage(ws, message) {
           console.log(`connection established from client <${address}>`)
           ClientConns[address] = ws
           //handleClientMessage(message, json)
+
+          // 获取最新bulletin
           let bulletin = await prisma.BULLETINS.findFirst({
             where: {
               address: address
@@ -699,6 +866,42 @@ async function checkClientMessage(ws, message) {
           }
           let msg = GenBulletinRequest(address, sequence, address)
           ClientConns[address].send(msg)
+
+          // 获取未缓存的bulletin文件
+          let bulletin_list = await prisma.BULLETINS.findMany({
+            orderBy: {
+              sequence: "desc"
+            }
+          })
+          let file_hash_list = []
+          bulletin_list.forEach(async bulletin => {
+            let file_list = JSON.parse(bulletin.file)
+            if (file_list && file_list.length != 0) {
+              file_list.forEach(async file => {
+                file_hash_list.push(file.Hash)
+              })
+            }
+          })
+          file_hash_list = toSetUniq(file_hash_list)
+          let file_list = await prisma.FILES.findMany({
+            where: {
+              AND: {
+                hash: {
+                  in: file_hash_list
+                },
+                chunk_length: {
+                  gt: prisma.FILES.chunk_cursor
+                }
+              }
+            }
+          })
+          // console.log('file_list', file_list)
+          file_list.forEach(async file => {
+            if (file.chunk_cursor < file.chunk_length) {
+              let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address)
+              ClientConns[address].send(msg)
+            }
+          })
         } else if (ClientConns[address] != ws && ClientConns[address].readyState == WebSocket.OPEN) {
           //new connection kick old conection with same address
           //当前地址有对应连接，断开旧连接，当前地址对应到当前连接
@@ -786,3 +989,99 @@ let OtherServerConnJob = null
 if (OtherServerConnJob == null) {
   OtherServerConnJob = setInterval(keepOtherServerConn, 5000);
 }
+
+// 刷新数据关联
+async function refreshData() {
+  //update pre_bulletin's next_hash
+  let bulletin_list = await prisma.BULLETINS.findMany({
+    orderBy: {
+      sequence: "desc"
+    }
+  })
+  for (let i = 0; i < bulletin_list.length; i++) {
+    const bulletin = bulletin_list[i]
+    if (bulletin.sequence != 1) {
+      await prisma.BULLETINS.update({
+        where: {
+          hash: bulletin.pre_hash
+        },
+        data: {
+          next_hash: bulletin.hash
+        }
+      })
+    }
+  }
+
+  //linking quote
+  bulletin_list.forEach(async bulletin => {
+    if (bulletin.quote) {
+      let quote_list = JSON.parse(bulletin.quote)
+      if (quote_list.length != 0) {
+        quote_list.forEach(async quote => {
+          let result = await prisma.QUOTES.findFirst({
+            where: {
+              main_hash: quote.Hash,
+              quote_hash: bulletin.hash
+            }
+          })
+          if (!result) {
+            result = await prisma.QUOTES.create({
+              data: {
+                main_hash: quote.Hash,
+                quote_hash: bulletin.hash,
+                address: bulletin.address,
+                sequence: bulletin.sequence,
+                content: bulletin.content,
+                signed_at: bulletin.signed_at
+              }
+            })
+            if (result) {
+              console.log(`linking`, quote)
+            }
+          }
+        })
+      }
+    }
+  })
+
+  //linking file
+  console.log(`**************************************linking file`)
+  bulletin_list.forEach(async bulletin => {
+    if (bulletin.file) {
+      let file_list = JSON.parse(bulletin.file)
+      // console.log(file_list)
+      if (file_list.length != 0) {
+        file_list.forEach(async file => {
+          console.log(file)
+          let result = await prisma.FILES.findFirst({
+            where: {
+              hash: file.Hash
+            }
+          })
+
+          if (!result) {
+            console.log(`resultooooooooooooooooooooooooooooooooooooooooooooo`)
+            console.log(result)
+            let chunk_length = Math.ceil(file.Size / FileChunkSize)
+            result = await prisma.FILES.create({
+              data: {
+                hash: file.Hash,
+                name: file.Name,
+                ext: file.Ext,
+                size: file.Size,
+                chunk_length: chunk_length,
+                chunk_cursor: 0
+              }
+            })
+            console.log(`linking`, file)
+          }
+        })
+      }
+    }
+  })
+
+}
+
+// refreshData()
+
+fs.mkdirSync(path.resolve('./BulletinFile'), { recursive: true })

@@ -5,7 +5,7 @@ import { PageSize, Json2Str } from '@/lib/Util'
 const prisma = new PrismaClient()
 
 export async function GET(request, { params }) {
-  // console.log(`=============================>>>0`)
+  console.log(`=============================>>>0`)
   let page = request.nextUrl.searchParams.get("page")
   const { hash = "" } = params
   try {
@@ -16,6 +16,7 @@ export async function GET(request, { params }) {
     })
     bulletin = Json2Str(bulletin)
     bulletin = JSON.parse(bulletin)
+
     let next = await prisma.BULLETINS.findFirst({
       where: {
         address: bulletin.address,
@@ -25,6 +26,7 @@ export async function GET(request, { params }) {
         hash: true
       }
     })
+
     let replys = await prisma.QUOTES.findMany({
       where: {
         main_hash: bulletin.hash
@@ -37,7 +39,7 @@ export async function GET(request, { params }) {
     })
     replys = Json2Str(replys)
     replys = JSON.parse(replys)
-    
+
     let reply_size = await prisma.QUOTES.count({
       where: {
         main_hash: bulletin.hash

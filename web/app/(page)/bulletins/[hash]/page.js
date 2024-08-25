@@ -33,12 +33,25 @@ async function Bulletin(props) {
     page_cursor = props.searchParams.page
   }
   let data = await getData(props.params.hash, page_cursor)
+
   let bulletin = data.bulletin
   if (!bulletin) {
     notFound()
   }
+
+  if (!bulletin.quote) {
+    bulletin['quote'] = '[]'
+  }
+  
+  if (!bulletin.file) {
+    bulletin['file'] = '[]'
+  }
+
   let quotes = bulletin.quote
   quotes = JSON.parse(quotes)
+
+  let files = bulletin.file
+  files = JSON.parse(files)
 
   let next = data.next
   let replys = data.replys
@@ -82,6 +95,16 @@ async function Bulletin(props) {
                 引用：{quotes.map((quote) => (
                   <div className="inline" key={quote.Hash}>
                     <Link href={`/bulletins/${quote.Hash}`} className='font-bold bg-yellow-500 rounded-md px-1'>{quote.Address}#{quote.Sequence}</Link>
+                  </div>
+                ))}
+              </div> : <></>
+          }
+          {
+            files.length != 0 ?
+              <div className="flex flex-wrap">
+                文件：{files.map((file) => (
+                  <div className="inline" key={file.Hash}>
+                    <Link href={`#`} className='font-bold bg-gray-500 rounded-md px-1'>{file.Name}.{file.Ext}({file.Size})</Link>
                   </div>
                 ))}
               </div> : <></>
