@@ -889,9 +889,8 @@ async function checkClientMessage(ws, message) {
                 hash: {
                   in: file_hash_list
                 },
-                // TODO
                 chunk_length: {
-                  gt: prisma.FILES.chunk_cursor
+                  gt: prisma.FILES.fields.chunk_cursor
                 }
               }
             }
