@@ -1,12 +1,8 @@
 const fs = require('fs')
+const Crypto = require('crypto')
 const path = require('path')
+const sqlite3 = require('sqlite3')
 const oxoKeyPairs = require("oxo-keypairs")
-
-//config
-// const ServerURL = "ws://127.0.0.1:8000"
-const ServerURL = "wss://ru.oxo-chat-server.com"
-// const Seed = "your_seed"
-const Seed = "x5ChjcMhWEX4EuWmnxhrKJredj3PP"
 
 //const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
 const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
@@ -14,6 +10,26 @@ const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
 const FileMaxSize = 16 * 1024 * 1024
 const FileChunkSize = 64 * 1024
 const BulletinFileExtRegex = /jpg|png|jpeg|txt|md/i
+
+//config
+// const Seed = "your_seed"
+const Seed = ""
+
+const keypair = oxoKeyPairs.deriveKeypair(Seed)
+const Address = oxoKeyPairs.deriveAddress(keypair.publicKey)
+const PublicKey = keypair.publicKey
+const PrivateKey = keypair.privateKey
+const SourDBPath = `./cache.db`
+const SourTable = `BULLETINS`
+const SourCondition = `address = '${Address}'`
+const SourColumnQuote = `quote`
+const SourColumnFile = `file`
+const SourColumnContent = `content`
+const SourColumnTimestamp = `signed_at`
+
+const DestDBPath = `./${Address}.db`
+let CurrentSequence = 0
+let CurrentPreHash = GenesisHash
 
 //keep alive
 process.on('uncaughtException', function (err) {
@@ -34,37 +50,7 @@ function toSetUniq(arr) {
   return Array.from(new Set(arr))
 }
 
-//ws
-const WebSocket = require('ws')
-let ws = null
-
-function connect() {
-  ws = new WebSocket(ServerURL)
-  ws.on('open', function open() {
-    console.log(`connected...`)
-    ws.send(genDeclare())
-  })
-
-  ws.on('message', function incoming(message) {
-    handleMessage(message)
-  })
-
-  ws.on('close', function close() {
-    console.log(`disconnected...`)
-  })
-}
-
-function sendMessage(msg) {
-  if (ws != null && ws.readyState == WebSocket.OPEN) {
-    ws.send(msg)
-  } else {
-    connect()
-  }
-}
-
 //crypto
-const Crypto = require('crypto')
-
 function hasherSHA512(str) {
   let sha512 = Crypto.createHash("sha512")
   sha512.update(str)
@@ -79,6 +65,16 @@ function quarterSHA512(str) {
   return hasherSHA512(str).toUpperCase().substr(0, 32);
 }
 
+function strToHex(str) {
+  let arr = []
+  let length = str.length
+  for (let i = 0; i < length; i++) {
+    arr[i] = (str.charCodeAt(i).toString(16))
+  }
+  return arr.join('').toUpperCase()
+}
+
+//oxo
 function genFileHashSync(file_path) {
   let file_content
   try {
@@ -93,43 +89,22 @@ function genFileHashSync(file_path) {
   return sha1.digest('hex').toUpperCase()
 }
 
-//oxo
-
-function strToHex(str) {
-  let arr = []
-  let length = str.length
-  for (let i = 0; i < length; i++) {
-    arr[i] = (str.charCodeAt(i).toString(16))
-  }
-  return arr.join('').toUpperCase()
-}
-
 function sign(msg, sk) {
   let msgHexStr = strToHex(msg)
   let sig = oxoKeyPairs.sign(msgHexStr, sk)
   return sig
 }
 
-function verifySignature(msg, sig, pk) {
-  let hexStrMsg = strToHex(msg)
-  try {
-    return oxoKeyPairs.verify(hexStrMsg, sig, pk)
-  } catch (e) {
-    return false
-  }
-}
+// function sign(msg, sk) {
+//   let msgHexStr = strToHex(msg)
+//   let sig = oxoKeyPairs.sign(msgHexStr, sk)
+//   return sig
+// }
 
-function VerifyJsonSignature(json) {
-  let sig = json["Signature"]
-  delete json["Signature"]
-  let tmpMsg = JSON.stringify(json)
-  if (verifySignature(tmpMsg, sig, json.PublicKey)) {
-    json["Signature"] = sig
-    return true
-  } else {
-    console.log('signature invalid...')
-    return false
-  }
+function signJson(json) {
+  let sig = sign(JSON.stringify(json), PrivateKey)
+  json.Signature = sig
+  return json
 }
 
 let ActionCode = {
@@ -171,6 +146,7 @@ const MessageCode = {
   "GatewayDeclareSuccess": 1000 //gateway declare success...
 }
 
+//message generator
 const ObjectType = {
   Bulletin: 101,
   BulletinFileChunk: 102,
@@ -180,88 +156,6 @@ const ObjectType = {
   GroupManage: 301,
   GroupMessage: 302,
   GroupFile: 303
-}
-
-const sqlite3 = require('sqlite3')
-
-let DB = null
-
-function initDB() {
-  //建库：数据库名为账号地址
-  DB = new sqlite3.Database(`./cache.db`)
-  //建表
-  DB.serialize(() => {
-    //为账号地址起名
-    DB.run(`CREATE TABLE IF NOT EXISTS BULLETINS(
-      hash VARCHAR(32) PRIMARY KEY,
-      pre_hash VARCHAR(32),
-      address VARCHAR(35) NOT NULL,
-      sequence INTEGER NOT NULL,
-      content TEXT NOT NULL,
-      quote TEXT NOT NULL,
-      file TEXT NOT NULL,
-      json TEXT NOT NULL,
-      signed_at INTEGER NOT NULL,
-      created_at INTEGER NOT NULL)`, err => {
-      if (err) {
-        console.log(err)
-      }
-    })
-
-    DB.run(`CREATE TABLE IF NOT EXISTS QUOTES(
-      main_hash VARCHAR(32) NOT NULL,
-      quote_hash VARCHAR(32) NOT NULL,
-      address VARCHAR(35) NOT NULL,
-      sequence INTEGER NOT NULL,
-      content TEXT NOT NULL,
-      signed_at INTEGER NOT NULL,
-      PRIMARY KEY ( main_hash, quote_hash ) )`, err => {
-      if (err) {
-        console.log(err)
-      }
-    })
-
-    DB.run(`CREATE TABLE IF NOT EXISTS FILES(
-      hash VARCHAR(32) PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      ext VARCHAR(255) NOT NULL,
-      size INTEGER NOT NULL,
-      chunk_length INTEGER NOT NULL,
-      chunk_cursor INTEGER NOT NULL )`, err => {
-      if (err) {
-        console.log(err)
-      }
-    })
-  })
-}
-
-////////hard copy from client<<<<<<<<
-const crypto = require("crypto")
-
-const keypair = oxoKeyPairs.deriveKeypair(Seed)
-const Address = oxoKeyPairs.deriveAddress(keypair.publicKey)
-const PublicKey = keypair.publicKey
-const PrivateKey = keypair.privateKey
-
-function sign(msg, sk) {
-  let msgHexStr = strToHex(msg);
-  let sig = oxoKeyPairs.sign(msgHexStr, sk);
-  return sig;
-}
-
-function signJson(json) {
-  let sig = sign(JSON.stringify(json), PrivateKey)
-  json.Signature = sig
-  return json
-}
-
-function genDeclare() {
-  let json = {
-    "Action": ActionCode.Declare,
-    "Timestamp": new Date().getTime(),
-    "PublicKey": PublicKey
-  }
-  return JSON.stringify(signJson(json))
 }
 
 function genObjectResponse(object, to) {
@@ -278,31 +172,20 @@ function genObjectResponse(object, to) {
   return strJson
 }
 
-function genBulletinRequest(address, sequence, to) {
-  let json = {
-    "Action": ActionCode.BulletinRequest,
-    "Address": address,
+function genBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
+  let content_hash = quarterSHA512(content)
+  let tmp_json = {
+    "ObjectType": ObjectType.Bulletin,
     "Sequence": sequence,
-    "To": to,
-    "Timestamp": Date.now(),
+    "PreHash": pre_hash,
+    "Quote": quote,
+    "File": file,
+    "ContentHash": content_hash,
+    "Timestamp": timestamp,
     "PublicKey": PublicKey
   }
-  return JSON.stringify(signJson(json))
-}
+  let sig = sign(JSON.stringify(tmp_json), PrivateKey)
 
-function genBulletinFileChunkRequest(hash, chunk_cursor, to) {
-  let json = {
-    Action: ActionCode.BulletinFileChunkRequest,
-    Hash: hash,
-    Cursor: chunk_cursor,
-    To: to,
-    Timestamp: Date.now(),
-    PublicKey: PublicKey
-  }
-  return JSON.stringify(signJson(json))
-}
-
-function genBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
   let json = {
     "ObjectType": ObjectType.Bulletin,
     "Sequence": sequence,
@@ -311,30 +194,47 @@ function genBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
     "File": file,
     "Content": content,
     "Timestamp": timestamp,
-    "PublicKey": PublicKey
+    "PublicKey": PublicKey,
+    "Signature": sig
   }
-  return signJson(json)
+  return json
 }
 
-function genBulletinAddressListRequest(page) {
-  let json = {
-    "Action": ActionCode.BulletinAddressListRequest,
-    "Page": page,
-    "Timestamp": Date.now(),
-    "PublicKey": PublicKey
-  }
-  return JSON.stringify(signJson(json))
-}
+// db
+let SourDB = new sqlite3.Database(SourDBPath)
+let DestDB = new sqlite3.Database(DestDBPath)
 
-function genBulletinReplyListRequest(hash, page) {
-  let json = {
-    "Action": ActionCode.BulletinReplyListRequest,
-    "Hash": hash,
-    "Page": page,
-    "Timestamp": Date.now(),
-    "PublicKey": PublicKey
-  }
-  return signJson(json)
+function initDestDB() {
+  //建表
+  DestDB.serialize(() => {
+    //为账号地址起名
+    DestDB.run(`CREATE TABLE IF NOT EXISTS BULLETINS(
+      hash VARCHAR(32) PRIMARY KEY,
+      pre_hash VARCHAR(32),
+      address VARCHAR(35) NOT NULL,
+      sequence INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      quote TEXT NOT NULL,
+      file TEXT NOT NULL,
+      json TEXT NOT NULL,
+      signed_at INTEGER NOT NULL)`, err => {
+      if (err) {
+        console.log(err)
+      }
+    })
+
+    DestDB.run(`CREATE TABLE IF NOT EXISTS FILES(
+      hash VARCHAR(32) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      ext VARCHAR(255) NOT NULL,
+      size INTEGER NOT NULL,
+      chunk_length INTEGER NOT NULL,
+      chunk_cursor INTEGER NOT NULL )`, err => {
+      if (err) {
+        console.log(err)
+      }
+    })
+  })
 }
 
 function CacheBulletin(bulletin) {
@@ -343,7 +243,7 @@ function CacheBulletin(bulletin) {
   let address = oxoKeyPairs.deriveAddress(bulletin.PublicKey)
   let SQL = `INSERT INTO BULLETINS (hash, pre_hash, address, sequence, content, quote, file, json, signed_at, created_at)
     VALUES ('${hash}', '${bulletin.PreHash}', '${address}', '${bulletin.Sequence}', '${bulletin.Content}', '${JSON.stringify(bulletin.Quote)}', '${JSON.stringify(bulletin.File)}', '${JSON.stringify(bulletin)}', ${bulletin.Timestamp}, ${timestamp})`
-  DB.run(SQL, err => {
+  DestDB.run(SQL, err => {
     if (err) {
       console.log(err)
     } else {
@@ -352,7 +252,7 @@ function CacheBulletin(bulletin) {
         for (let i = 0; i < file_list.length; i++) {
           const file = file_list[i]
           SQL = `SELECT * FROM FILES WHERE hash = "${file.Hash}"`
-          DB.get(SQL, (err, item) => {
+          DestDB.get(SQL, (err, item) => {
             if (err) {
               console.log(err)
             } else {
@@ -360,7 +260,7 @@ function CacheBulletin(bulletin) {
                 let chunk_length = Math.ceil(file.Size / FileChunkSize)
                 SQL = `INSERT INTO FILES (hash, name, ext, size, chunk_length, chunk_cursor)
                   VALUES ('${file.Hash}', '${file.Name}', '${file.Ext}', ${file.Size}, ${chunk_length}, 0)`
-                DB.run(SQL, err => {
+                DestDB.run(SQL, err => {
                   if (err) {
                     console.log(err)
                   } else {
@@ -379,14 +279,14 @@ function CacheBulletin(bulletin) {
         for (let i = 0; i < quote_list.length; i++) {
           const quote = quote_list[i]
           SQL = `SELECT * FROM QUOTES WHERE main_hash = "${quote.Hash}" AND quote_hash = "${hash}"`
-          DB.get(SQL, (err, item) => {
+          DestDB.get(SQL, (err, item) => {
             if (err) {
               console.log(err)
             } else {
               if (item == null) {
                 SQL = `INSERT INTO QUOTES (main_hash, quote_hash, address, sequence, content, signed_at)
                   VALUES ('${quote.Hash}', '${hash}', '${address}', ${bulletin.Sequence}, '${bulletin.Content}', ${bulletin.Timestamp})`
-                DB.run(SQL, err => {
+                DestDB.run(SQL, err => {
                   if (err) {
                     console.log(err)
                   } else {
@@ -416,7 +316,7 @@ function handleMessage(message) {
       //cache bulletin file
       let address = oxoKeyPairs.deriveAddress(json.PublicKey)
       let SQL = `SELECT * FROM FILES WHERE hash = "${json.Object.Hash}"`
-      DB.get(SQL, (err, bulletin_file) => {
+      DestDB.get(SQL, (err, bulletin_file) => {
         if (err) {
           console.log(err)
         } else {
@@ -429,7 +329,7 @@ function handleMessage(message) {
               fs.appendFileSync(path.resolve(file_path), utf8_buffer)
               let current_chunk_cursor = bulletin_file.chunk_cursor + 1
               SQL = `UPDATE FILES SET chunk_cursor = ${current_chunk_cursor} WHERE hash = "${json.Object.Hash}"`
-              DB.run(SQL, err => {
+              DestDB.run(SQL, err => {
                 if (err) {
                   console.log(err)
                 } else {
@@ -443,7 +343,7 @@ function handleMessage(message) {
                     if (hash != json.Object.Hash) {
                       fs.rmSync(path.resolve(file_path))
                       SQL = `UPDATE FILES SET chunk_cursor = 0 WHERE hash = "${json.Object.Hash}"`
-                      DB.run(SQL, err => {
+                      DestDB.run(SQL, err => {
                         if (err) {
                           console.log(err)
                         } else {
@@ -467,7 +367,7 @@ function handleMessage(message) {
   if (json.Action == ActionCode.BulletinRequest) {
     //send cache bulletin
     let SQL = `SELECT * FROM BULLETINS WHERE address = "${json.Address}" AND sequence = "${json.Sequence}"`
-    DB.get(SQL, (err, item) => {
+    DestDB.get(SQL, (err, item) => {
       if (err) {
         console.log(err)
       } else {
@@ -480,7 +380,7 @@ function handleMessage(message) {
           console.log(`<done`)
         } else {
           SQL = `SELECT * FROM BULLETINS WHERE address = "${json.Address}" ORDER BY sequence DESC LIMIT 1`
-          DB.get(SQL, (err, item) => {
+          DestDB.get(SQL, (err, item) => {
             if (err) {
               console.log(err)
             } else {
@@ -512,7 +412,7 @@ function handleMessage(message) {
       for (let i = 0; i < account_list.length; i++) {
         const account = account_list[i]
         SQL = `SELECT * FROM BULLETINS WHERE address = "${account.Address}" ORDER BY sequence DESC LIMIT 1`
-        DB.get(SQL, (err, bulletin) => {
+        DestDB.get(SQL, (err, bulletin) => {
           if (err) {
             console.log(err)
           } else {
@@ -539,7 +439,7 @@ function sync() {
   sendMessage(msg)
 
   let SQL = `SELECT * FROM FILES WHERE chunk_length != chunk_cursor`
-  DB.all(SQL, (err, files) => {
+  DestDB.all(SQL, (err, files) => {
     if (err) {
       console.log(err)
     } else {
@@ -555,38 +455,112 @@ function sync() {
   })
 }
 
+async function queryAll(sql) {
+  return new Promise((resolve, reject) => {
+    DestDB.all(sql, [], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+      db.close();
+    });
+  });
+}
+
+async function runSql(sql) {
+  return new Promise((resolve, reject) => {
+    DestDB.run(sql, err => {
+      if (err) {
+        console.log(err)
+        reject(err)
+      } else {
+        resolve(true)
+      }
+    })
+  })
+}
+
+function gen() {
+  let begin_at = Date.now()
+
+  let SQL = `SELECT * FROM ${SourTable} where ${SourCondition} ORDER BY ${SourColumnTimestamp} ASC`
+  SourDB.all(SQL, async (err, bulletins) => {
+    if (err) {
+      console.log(err)
+    } else {
+      console.log(`BulletinCount: ${bulletins.length}`)
+
+      for (let i = 0; i < bulletins.length; i++) {
+        const tmp_bulletin = bulletins[i]
+        let quote = tmp_bulletin[SourColumnQuote] || []
+        let file = tmp_bulletin[SourColumnFile] || []
+        let content = tmp_bulletin[SourColumnContent].replace(/<br>/g, '\n')
+        let timestamp = tmp_bulletin[SourColumnTimestamp]
+        let bulletin = genBulletinJson(CurrentSequence + 1, CurrentPreHash, quote, file, content, timestamp)
+        // let bulletin = genBulletinJsonOld(CurrentSequence + 1, CurrentPreHash, quote, file, content, timestamp)
+        // console.log(bulletin)
+        let bulletin_str = JSON.stringify(bulletin)
+        let hash = quarterSHA512(bulletin_str)
+
+        SQL = `INSERT INTO BULLETINS (hash, pre_hash, address, sequence, content, quote, file, json, signed_at)
+          VALUES ('${hash}', '${bulletin.PreHash}', '${Address}', '${bulletin.Sequence}', '${bulletin.Content}', '${JSON.stringify(bulletin.Quote)}', '${JSON.stringify(bulletin.File)}', '${bulletin_str}', ${bulletin.Timestamp})`
+        let result = await runSql(SQL)
+        if (result) {
+          console.log(`CacheBulletin#${bulletin.Sequence} : ${hash}`)
+          CurrentSequence = CurrentSequence + 1
+          CurrentPreHash = hash
+        } else {
+          console.log(`something wrong++++++++++++++++++++++++++++++`)
+        }
+
+
+
+        // DestDB.run(SQL, err => {
+        //   if (err) {
+        //     console.log(err)
+        //   } else {
+        //     let file_list = bulletin.File
+        //     if (file_list && file_list.length > 0) {
+        //       for (let i = 0; i < file_list.length; i++) {
+        //         const file = file_list[i]
+        //         SQL = `SELECT * FROM FILES WHERE hash = "${file.Hash}"`
+        //         DestDB.get(SQL, (err, item) => {
+        //           if (err) {
+        //             console.log(err)
+        //           } else {
+        //             if (item == null) {
+        //               let chunk_length = Math.ceil(file.Size / FileChunkSize)
+        //               SQL = `INSERT INTO FILES (hash, name, ext, size, chunk_length, chunk_cursor)
+        //               VALUES ('${file.Hash}', '${file.Name}', '${file.Ext}', ${file.Size}, ${chunk_length}, 0)`
+        //               DestDB.run(SQL, err => {
+        //                 if (err) {
+        //                   console.log(err)
+        //                 } else {
+        //                   let msg = genBulletinFileChunkRequest(file.Hash, 1, address)
+        //                   sendMessage(msg)
+        //                 }
+        //               })
+        //             }
+        //           }
+        //         })
+        //       }
+        //     }
+        //   }
+        // })
+      }
+
+      let end_at = Date.now()
+      console.log(`>>>>>>>>>>>>>>>>>>>>>>>Cost Time:`, end_at - begin_at)
+    }
+  })
+
+}
+
 function init() {
-  initDB()
   console.log(`use account: ${Address}`)
-
-  let SQL = `SELECT * FROM BULLETINS`
-  DB.all(SQL, (err, items) => {
-    if (err) {
-      console.log(err)
-    } else {
-      console.log(`BulletinCount: ${items.length}`)
-    }
-  })
-
-  SQL = `SELECT * FROM FILES`
-  DB.all(SQL, (err, items) => {
-    if (err) {
-      console.log(err)
-    } else {
-      console.log(`****FileCount: ${items.length}`)
-    }
-  })
-
-  SQL = `SELECT * FROM BULLETINS GROUP BY address`
-  DB.all(SQL, (err, items) => {
-    if (err) {
-      console.log(err)
-    } else {
-      console.log(`*AddressCount: ${items.length}`)
-    }
-  })
-
-  connect()
+  initDestDB()
+  gen()
 }
 
 init()
