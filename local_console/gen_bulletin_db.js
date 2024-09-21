@@ -498,8 +498,6 @@ function gen() {
         let content = tmp_bulletin[SourColumnContent].replace(/<br>/g, '\n')
         let timestamp = tmp_bulletin[SourColumnTimestamp]
         let bulletin = genBulletinJson(CurrentSequence + 1, CurrentPreHash, quote, file, content, timestamp)
-        // let bulletin = genBulletinJsonOld(CurrentSequence + 1, CurrentPreHash, quote, file, content, timestamp)
-        // console.log(bulletin)
         let bulletin_str = JSON.stringify(bulletin)
         let hash = quarterSHA512(bulletin_str)
 
