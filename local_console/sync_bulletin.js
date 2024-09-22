@@ -1,8 +1,8 @@
 const fs = require('fs')
+const Crypto = require('crypto')
 const path = require('path')
 const sqlite3 = require('sqlite3')
 const WebSocket = require('ws')
-const Crypto = require('crypto')
 const oxoKeyPairs = require("oxo-keypairs")
 const Schema = require('./schema.js')
 
@@ -10,7 +10,11 @@ const Schema = require('./schema.js')
 // const ServerURL = "ws://127.0.0.1:8000"
 const ServerURL = "wss://ru.oxo-chat-server.com"
 // const Seed = "your_seed"
-const Seed = "x5ChjcMhWEX4EuWmnxhrKJredj3PP"
+const Seed = oxoKeyPairs.generateSeed("RandomSeed", 'secp256k1')
+const keypair = oxoKeyPairs.deriveKeypair(Seed)
+const Address = oxoKeyPairs.deriveAddress(keypair.publicKey)
+const PublicKey = keypair.publicKey
+const PrivateKey = keypair.privateKey
 
 // const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
 const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
@@ -28,7 +32,6 @@ process.on('uncaughtException', function (err) {
 })
 
 // json
-
 function cloneJson(json) {
   return JSON.parse(JSON.stringify(json))
 }
@@ -43,7 +46,7 @@ let ws = null
 function connect() {
   ws = new WebSocket(ServerURL)
   ws.on('open', function open() {
-    console.log(`connected...`)
+    console.log(`connected <===> ${ServerURL}`)
     ws.send(genDeclare())
   })
 
@@ -79,21 +82,6 @@ function quarterSHA512(str) {
   return hasherSHA512(str).toUpperCase().substr(0, 32);
 }
 
-function genFileHashSync(file_path) {
-  let file_content
-  try {
-    file_content = fs.readFileSync(file_path)
-  } catch (err) {
-    console.error(err)
-    return null
-  }
-
-  const sha1 = Crypto.createHash('sha1')
-  sha1.update(file_content)
-  return sha1.digest('hex').toUpperCase()
-}
-
-// oxo
 function strToHex(str) {
   let arr = []
   let length = str.length
@@ -103,10 +91,17 @@ function strToHex(str) {
   return arr.join('').toUpperCase()
 }
 
+// oxo
 function sign(msg, sk) {
   let msgHexStr = strToHex(msg)
   let sig = oxoKeyPairs.sign(msgHexStr, sk)
   return sig
+}
+
+function signJson(json) {
+  let sig = sign(JSON.stringify(json), PrivateKey)
+  json.Signature = sig
+  return json
 }
 
 function verifySignature(msg, sig, pk) {
@@ -156,6 +151,17 @@ const ActionCode = {
   GroupFileRequest: 405
 }
 
+const ObjectType = {
+  Bulletin: 101,
+  BulletinFileChunk: 102,
+
+  PrivateFile: 201,
+
+  GroupManage: 301,
+  GroupMessage: 302,
+  GroupFile: 303
+}
+
 // message
 const MessageCode = {
   JsonSchemaInvalid: 0, // json schema invalid...
@@ -170,18 +176,103 @@ const MessageCode = {
   GatewayDeclareSuccess: 1000 // gateway declare success...
 }
 
-const ObjectType = {
-  Bulletin: 101,
-  BulletinFileChunk: 102,
-
-  PrivateFile: 201,
-
-  GroupManage: 301,
-  GroupMessage: 302,
-  GroupFile: 303
+function genDeclare() {
+  let json = {
+    Action: ActionCode.Declare,
+    Timestamp: new Date().getTime(),
+    PublicKey: PublicKey
+  }
+  return JSON.stringify(signJson(json))
 }
 
+function genObjectResponse(object, to) {
+  let json = {
+    Action: ActionCode.ObjectResponse,
+    Object: object,
+    To: to,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey,
+  }
+  let sig = sign(JSON.stringify(json), PrivateKey)
+  json.Signature = sig
+  let strJson = JSON.stringify(json)
+  return strJson
+}
 
+function genBulletinRequest(address, sequence, to) {
+  let json = {
+    Action: ActionCode.BulletinRequest,
+    Address: address,
+    Sequence: sequence,
+    To: to,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey
+  }
+  return JSON.stringify(signJson(json))
+}
+
+function genBulletinFileChunkRequest(hash, chunk_cursor, to) {
+  let json = {
+    Action: ActionCode.BulletinFileChunkRequest,
+    Hash: hash,
+    Cursor: chunk_cursor,
+    To: to,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey
+  }
+  return JSON.stringify(signJson(json))
+}
+
+function genFileHashSync(file_path) {
+  let file_content
+  try {
+    file_content = fs.readFileSync(file_path)
+  } catch (err) {
+    console.error(err)
+    return null
+  }
+
+  const sha1 = Crypto.createHash('sha1')
+  sha1.update(file_content)
+  return sha1.digest('hex').toUpperCase()
+}
+
+function genBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
+  let json = {
+    ObjectType: ObjectType.Bulletin,
+    Sequence: sequence,
+    PreHash: pre_hash,
+    Quote: quote,
+    File: file,
+    Content: content,
+    Timestamp: timestamp,
+    PublicKey: PublicKey
+  }
+  return signJson(json)
+}
+
+function genBulletinAddressListRequest(page) {
+  let json = {
+    Action: ActionCode.BulletinAddressListRequest,
+    Page: page,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey
+  }
+  return JSON.stringify(signJson(json))
+}
+
+function genBulletinReplyListRequest(hash, page) {
+  let json = {
+    Action: ActionCode.BulletinReplyListRequest,
+    Hash: hash,
+    Page: page,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey
+  }
+  return signJson(json)
+}
+
+// db
 let DB = null
 
 function initDB() {
@@ -233,105 +324,7 @@ function initDB() {
   })
 }
 
-const keypair = oxoKeyPairs.deriveKeypair(Seed)
-const Address = oxoKeyPairs.deriveAddress(keypair.publicKey)
-const PublicKey = keypair.publicKey
-const PrivateKey = keypair.privateKey
-
-function sign(msg, sk) {
-  let msgHexStr = strToHex(msg);
-  let sig = oxoKeyPairs.sign(msgHexStr, sk);
-  return sig;
-}
-
-function signJson(json) {
-  let sig = sign(JSON.stringify(json), PrivateKey)
-  json.Signature = sig
-  return json
-}
-
-function genDeclare() {
-  let json = {
-    Action: ActionCode.Declare,
-    Timestamp: new Date().getTime(),
-    PublicKey: PublicKey
-  }
-  return JSON.stringify(signJson(json))
-}
-
-function genObjectResponse(object, to) {
-  let json = {
-    Action: ActionCode.ObjectResponse,
-    Object: object,
-    To: to,
-    Timestamp: Date.now(),
-    PublicKey: PublicKey,
-  }
-  let sig = sign(JSON.stringify(json), PrivateKey)
-  json.Signature = sig
-  let strJson = JSON.stringify(json)
-  return strJson
-}
-
-function genBulletinRequest(address, sequence, to) {
-  let json = {
-    Action: ActionCode.BulletinRequest,
-    Address: address,
-    Sequence: sequence,
-    To: to,
-    Timestamp: Date.now(),
-    PublicKey: PublicKey
-  }
-  return JSON.stringify(signJson(json))
-}
-
-function genBulletinFileChunkRequest(hash, chunk_cursor, to) {
-  let json = {
-    Action: ActionCode.BulletinFileChunkRequest,
-    Hash: hash,
-    Cursor: chunk_cursor,
-    To: to,
-    Timestamp: Date.now(),
-    PublicKey: PublicKey
-  }
-  return JSON.stringify(signJson(json))
-}
-
-function genBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
-  let json = {
-    ObjectType: ObjectType.Bulletin,
-    Sequence: sequence,
-    PreHash: pre_hash,
-    Quote: quote,
-    File: file,
-    Content: content,
-    Timestamp: timestamp,
-    PublicKey: PublicKey
-  }
-  return signJson(json)
-}
-
-function genBulletinAddressListRequest(page) {
-  let json = {
-    Action: ActionCode.BulletinAddressListRequest,
-    Page: page,
-    Timestamp: Date.now(),
-    PublicKey: PublicKey
-  }
-  return JSON.stringify(signJson(json))
-}
-
-function genBulletinReplyListRequest(hash, page) {
-  let json = {
-    Action: ActionCode.BulletinReplyListRequest,
-    Hash: hash,
-    Page: page,
-    Timestamp: Date.now(),
-    PublicKey: PublicKey
-  }
-  return signJson(json)
-}
-
+// function
 function CacheBulletin(bulletin) {
   let timestamp = Date.now()
   let hash = quarterSHA512(JSON.stringify(bulletin))
@@ -402,7 +395,7 @@ function CacheBulletin(bulletin) {
 
 function handleMessage(message) {
   let json = JSON.parse(message)
-  console.log(json)
+  // console.log(json)
   if (json["To"] != null) {
     // cache bulletin
     if (json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.Bulletin) {
@@ -466,14 +459,15 @@ function handleMessage(message) {
       if (err) {
         console.log(err)
       } else {
-        console.log(`>>>server request #${json.Sequence}`)
+        console.log(`request >>> ${json.Address}#${json.Sequence}`)
         if (item != null) {
           let address = oxoKeyPairs.deriveAddress(json["PublicKey"])
           let bulletin_json = JSON.parse(item.json)
           let msg = genObjectResponse(bulletin_json, address)
           sendMessage(msg)
-          console.log(`<done`)
+          console.log(`response <<< ${json.Address}#${json.Sequence}`)
         } else {
+          console.log(`not found === ${json.Address}#${json.Sequence}`)
           SQL = `SELECT * FROM BULLETINS WHERE address = "${json.Address}" ORDER BY sequence DESC LIMIT 1`
           DB.get(SQL, (err, item) => {
             if (err) {
@@ -483,14 +477,11 @@ function handleMessage(message) {
               if (item != null) {
                 local_seq = item.sequence
               }
-              console.log(`===local sequence is #${local_seq}`)
               // sync from server
               if (local_seq < json.Sequence - 1) {
                 let msg = genBulletinRequest(Address, local_seq + 1, Address)
                 sendMessage(msg)
               }
-
-              sync()
             }
           })
         }
@@ -503,6 +494,7 @@ function handleMessage(message) {
     sendMessage(msg)
   } else if (json.Action == ActionCode.BulletinAddressListResponse) {
     let account_list = json.List
+    // pull step 2: fetch all account's bulletin
     if (account_list.length > 0) {
       for (let i = 0; i < account_list.length; i++) {
         const account = account_list[i]
@@ -528,18 +520,46 @@ function handleMessage(message) {
   }
 }
 
-function sync() {
+function pull_bulletin() {
   // clone all bulletin from server
+  // pull step 1: fetch all account
   let msg = genBulletinAddressListRequest(1)
   sendMessage(msg)
+}
 
+function push_bulletin() {
+  let SQL = `SELECT address, sequence FROM BULLETINS`
+  DB.all(SQL, (err, items) => {
+    if (err) {
+      console.log(err)
+    } else {
+      let bulletin_sequence = {}
+      items.forEach(item => {
+        if (bulletin_sequence[item.address] == null) {
+          bulletin_sequence[item.address] = item.sequence
+        } else if (bulletin_sequence[item.address] < item.sequence) {
+          bulletin_sequence[item.address] = item.sequence
+        }
+      })
+
+
+      for (const address in bulletin_sequence) {
+        let msg = genBulletinRequest(address, bulletin_sequence[address] + 1, address)
+        sendMessage(msg)
+      }
+    }
+  })
+}
+
+function download_bulletin_files() {
   let SQL = `SELECT * FROM FILES WHERE chunk_length != chunk_cursor`
   DB.all(SQL, (err, files) => {
     if (err) {
       console.log(err)
     } else {
-      console.log(files)
       if (files && files.length > 0) {
+        console.log(`--------------------------files to down------------------`)
+        console.log(files)
         for (let i = 0; i < files.length; i++) {
           const file = files[i]
           let msg = genBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, '')
@@ -550,8 +570,12 @@ function sync() {
   })
 }
 
-function init() {
+function go() {
   initDB()
+  connect()
+  pull_bulletin()
+  push_bulletin()
+  download_bulletin_files()
   console.log(`use account: ${Address}`)
 
   let SQL = `SELECT * FROM BULLETINS`
@@ -581,7 +605,6 @@ function init() {
     }
   })
 
-  connect()
 }
 
-init()
+go()
