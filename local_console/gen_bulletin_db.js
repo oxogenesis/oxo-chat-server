@@ -99,27 +99,27 @@ const ObjectType = {
 function genBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
   let content_hash = quarterSHA512(content)
   let tmp_json = {
-    "ObjectType": ObjectType.Bulletin,
-    "Sequence": sequence,
-    "PreHash": pre_hash,
-    "Quote": quote,
-    "File": file,
-    "ContentHash": content_hash,
-    "Timestamp": timestamp,
-    "PublicKey": PublicKey
+    ObjectType: ObjectType.Bulletin,
+    Sequence: sequence,
+    PreHash: pre_hash,
+    Quote: quote,
+    File: file,
+    ContentHash: content_hash,
+    Timestamp: timestamp,
+    PublicKey: PublicKey
   }
   let sig = sign(JSON.stringify(tmp_json), PrivateKey)
 
   let json = {
-    "ObjectType": ObjectType.Bulletin,
-    "Sequence": sequence,
-    "PreHash": pre_hash,
-    "Quote": quote,
-    "File": file,
-    "Content": content,
-    "Timestamp": timestamp,
-    "PublicKey": PublicKey,
-    "Signature": sig
+    ObjectType: ObjectType.Bulletin,
+    Sequence: sequence,
+    PreHash: pre_hash,
+    Quote: quote,
+    File: file,
+    Content: content,
+    Timestamp: timestamp,
+    PublicKey: PublicKey,
+    Signature: sig
   }
   return json
 }
@@ -210,7 +210,7 @@ function gen_bulletin() {
         if (tmp_bulletin[SourColumnFile]) {
           file = JSON.parse(tmp_bulletin[SourColumnFile])
         }
-        let content = tmp_bulletin[SourColumnContent]
+        let content = tmp_bulletin[SourColumnContent]//.replace(/<br>/g, '\n')
         let timestamp = tmp_bulletin[SourColumnTimestamp]
         let bulletin = genBulletinJson(CurrentSequence + 1, CurrentPreHash, quote, file, content, timestamp)
         let bulletin_str = JSON.stringify(bulletin)
