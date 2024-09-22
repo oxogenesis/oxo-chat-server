@@ -1,10 +1,13 @@
 const fs = require('fs')
+const Crypto = require('crypto')
 const path = require('path')
+const WebSocket = require("ws")
+const oxoKeyPairs = require("oxo-keypairs")
 const { PrismaClient } = require("@prisma/client")
+const Schema = require("./schema.js")
 
 const prisma = new PrismaClient()
 
-const oxoKeyPairs = require("oxo-keypairs")
 
 //config
 const SelfURL = "ws://127.0.0.1:8000"
@@ -23,7 +26,6 @@ process.on("uncaughtException", function (err) {
 })
 
 //json
-const Schema = require("./schema.js")
 
 function cloneJson(json) {
   return JSON.parse(JSON.stringify(json))
@@ -34,11 +36,8 @@ function toSetUniq(arr) {
 }
 
 //ws
-const WebSocket = require("ws")
 
 //crypto
-const Crypto = require("crypto")
-
 function hasherSHA512(str) {
   let sha512 = Crypto.createHash("sha512")
   sha512.update(str)

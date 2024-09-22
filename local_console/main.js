@@ -119,53 +119,54 @@ function VerifyJsonSignature(json) {
   }
 }
 
-let ActionCode = {
-  "Declare": 100,
-  "ObjectResponse": 101,
+const ActionCode = {
+  Declare: 100,
+  ObjectResponse: 101,
 
-  "BulletinRandom": 200,
-  "BulletinRequest": 201,
-  "BulletinFileRequest": 202,
-  "BulletinAddressListRequest": 203,
-  "BulletinAddressListResponse": 204,
-  "BulletinReplyListRequest": 205,
-  "BulletinReplyListResponse": 206,
+  BulletinRandom: 200,
+  BulletinRequest: 201,
+  BulletinFileChunkRequest: 202,
+  BulletinAddressListRequest: 203,
+  BulletinAddressListResponse: 204,
+  BulletinReplyListRequest: 205,
+  BulletinReplyListResponse: 206,
 
-  "ChatDH": 301,
-  "ChatMessage": 302,
-  "ChatSync": 303,
-  "PrivateFileRequest": 304,
+  ChatDH: 301,
+  ChatMessage: 302,
+  ChatSync: 303,
+  PrivateFileRequest: 304,
+  ChatSyncFromServer: 305,
 
-  "GroupRequest": 401,
-  "GroupManageSync": 402,
-  "GroupDH": 403,
-  "GroupMessageSync": 404,
-  "GroupFileRequest": 405
+  GroupRequest: 401,
+  GroupManageSync: 402,
+  GroupDH: 403,
+  GroupMessageSync: 404,
+  GroupFileRequest: 405
 }
 
-//message
+// message
 const MessageCode = {
-  "JsonSchemaInvalid": 0, //json schema invalid...
-  "SignatureInvalid": 1, //signature invalid...
-  "TimestampInvalid": 2, //timestamp invalid...
-  "BalanceInsufficient": 3, //balance insufficient...
-  "NewConnectionOpening": 4, //address changed...
-  "AddressChanged": 5, //new connection with same address is opening...
-  "ToSelfIsForbidden": 6, //To self is forbidden...
-  "ToNotExist": 7, //To not exist...
+  JsonSchemaInvalid: 0, // json schema invalid...
+  SignatureInvalid: 1, // signature invalid...
+  TimestampInvalid: 2, // timestamp invalid...
+  BalanceInsufficient: 3, // balance insufficient...
+  NewConnectionOpening: 4, // address changed...
+  AddressChanged: 5, // new connection with same address is opening...
+  ToSelfIsForbidden: 6, // To self is forbidden...
+  ToNotExist: 7, // To not exist...
 
-  "GatewayDeclareSuccess": 1000 //gateway declare success...
+  GatewayDeclareSuccess: 1000 // gateway declare success...
 }
 
 const ObjectType = {
-  "Bulletin": 101,
-  "BulletinFile": 102,
+  Bulletin: 101,
+  BulletinFileChunk: 102,
 
-  "PrivateFile": 201,
+  PrivateFile: 201,
 
-  "GroupManage": 301,
-  "GroupMessage": 302,
-  "GroupFile": 303
+  GroupManage: 301,
+  GroupMessage: 302,
+  GroupFile: 303
 }
 
 const sqlite3 = require('sqlite3')
@@ -270,20 +271,20 @@ function signJson(json) {
 
 function genDeclare() {
   let json = {
-    "Action": ActionCode.Declare,
-    "Timestamp": new Date().getTime(),
-    "PublicKey": PublicKey
+    Action: ActionCode.Declare,
+    Timestamp: new Date().getTime(),
+    PublicKey: PublicKey
   }
   return JSON.stringify(signJson(json))
 }
 
 function genObjectResponse(object, to) {
   let json = {
-    "Action": ActionCode.ObjectResponse,
-    "Object": object,
-    "To": to,
-    "Timestamp": Date.now(),
-    "PublicKey": PublicKey,
+    Action: ActionCode.ObjectResponse,
+    Object: object,
+    To: to,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey,
   }
   let sig = sign(JSON.stringify(json), PrivateKey)
   json.Signature = sig
@@ -293,46 +294,46 @@ function genObjectResponse(object, to) {
 
 function genBulletinRequest(address, sequence, to) {
   let json = {
-    "Action": ActionCode.BulletinRequest,
-    "Address": address,
-    "Sequence": sequence,
-    "To": to,
-    "Timestamp": Date.now(),
-    "PublicKey": PublicKey
+    Action: ActionCode.BulletinRequest,
+    Address: address,
+    Sequence: sequence,
+    To: to,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey
   }
   return JSON.stringify(signJson(json))
 }
 
 function genBulletinJson(sequence, pre_hash, quote, content, timestamp) {
   let json = {
-    "ObjectType": ObjectType.Bulletin,
-    "Sequence": sequence,
-    "PreHash": pre_hash,
-    "Quote": quote,
-    "Content": content,
-    "Timestamp": timestamp,
-    "PublicKey": PublicKey
+    ObjectType: ObjectType.Bulletin,
+    Sequence: sequence,
+    PreHash: pre_hash,
+    Quote: quote,
+    Content: content,
+    Timestamp: timestamp,
+    PublicKey: PublicKey
   }
   return signJson(json)
 }
 
 function genBulletinAddressListRequest(page) {
   let json = {
-    "Action": ActionCode.BulletinAddressListRequest,
-    "Page": page,
-    "Timestamp": Date.now(),
-    "PublicKey": PublicKey
+    Action: ActionCode.BulletinAddressListRequest,
+    Page: page,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey
   }
   return signJson(json)
 }
 
 function genBulletinReplyListRequest(hash, page) {
   let json = {
-    "Action": ActionCode.BulletinReplyListRequest,
-    "Hash": hash,
-    "Page": page,
-    "Timestamp": Date.now(),
-    "PublicKey": PublicKey
+    Action: ActionCode.BulletinReplyListRequest,
+    Hash: hash,
+    Page: page,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey
   }
   return signJson(json)
 }

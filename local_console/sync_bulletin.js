@@ -1,30 +1,33 @@
 const fs = require('fs')
 const path = require('path')
+const sqlite3 = require('sqlite3')
+const WebSocket = require('ws')
+const Crypto = require('crypto')
 const oxoKeyPairs = require("oxo-keypairs")
+const Schema = require('./schema.js')
 
-//config
+// config
 // const ServerURL = "ws://127.0.0.1:8000"
 const ServerURL = "wss://ru.oxo-chat-server.com"
 // const Seed = "your_seed"
 const Seed = "x5ChjcMhWEX4EuWmnxhrKJredj3PP"
 
-//const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
+// const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
 const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
 
 const FileMaxSize = 16 * 1024 * 1024
 const FileChunkSize = 64 * 1024
 const BulletinFileExtRegex = /jpg|png|jpeg|txt|md/i
 
-//keep alive
+// keep alive
 process.on('uncaughtException', function (err) {
-  //打印出错误
+  // 打印出错误
   console.log(err)
-  //打印出错误的调用栈方便调试
+  // 打印出错误的调用栈方便调试
   console.log(err.stack)
 })
 
-//json
-const Schema = require('./schema.js')
+// json
 
 function cloneJson(json) {
   return JSON.parse(JSON.stringify(json))
@@ -34,8 +37,7 @@ function toSetUniq(arr) {
   return Array.from(new Set(arr))
 }
 
-//ws
-const WebSocket = require('ws')
+// ws
 let ws = null
 
 function connect() {
@@ -62,9 +64,7 @@ function sendMessage(msg) {
   }
 }
 
-//crypto
-const Crypto = require('crypto')
-
+// crypto
 function hasherSHA512(str) {
   let sha512 = Crypto.createHash("sha512")
   sha512.update(str)
@@ -93,8 +93,7 @@ function genFileHashSync(file_path) {
   return sha1.digest('hex').toUpperCase()
 }
 
-//oxo
-
+// oxo
 function strToHex(str) {
   let arr = []
   let length = str.length
@@ -132,7 +131,7 @@ function VerifyJsonSignature(json) {
   }
 }
 
-let ActionCode = {
+const ActionCode = {
   Declare: 100,
   ObjectResponse: 101,
 
@@ -157,18 +156,18 @@ let ActionCode = {
   GroupFileRequest: 405
 }
 
-//message
+// message
 const MessageCode = {
-  "JsonSchemaInvalid": 0, //json schema invalid...
-  "SignatureInvalid": 1, //signature invalid...
-  "TimestampInvalid": 2, //timestamp invalid...
-  "BalanceInsufficient": 3, //balance insufficient...
-  "NewConnectionOpening": 4, //address changed...
-  "AddressChanged": 5, //new connection with same address is opening...
-  "ToSelfIsForbidden": 6, //To self is forbidden...
-  "ToNotExist": 7, //To not exist...
+  JsonSchemaInvalid: 0, // json schema invalid...
+  SignatureInvalid: 1, // signature invalid...
+  TimestampInvalid: 2, // timestamp invalid...
+  BalanceInsufficient: 3, // balance insufficient...
+  NewConnectionOpening: 4, // address changed...
+  AddressChanged: 5, // new connection with same address is opening...
+  ToSelfIsForbidden: 6, // To self is forbidden...
+  ToNotExist: 7, // To not exist...
 
-  "GatewayDeclareSuccess": 1000 //gateway declare success...
+  GatewayDeclareSuccess: 1000 // gateway declare success...
 }
 
 const ObjectType = {
@@ -182,16 +181,15 @@ const ObjectType = {
   GroupFile: 303
 }
 
-const sqlite3 = require('sqlite3')
 
 let DB = null
 
 function initDB() {
-  //建库：数据库名为账号地址
+  // 建库：数据库名为账号地址
   DB = new sqlite3.Database(`./cache.db`)
-  //建表
+  // 建表
   DB.serialize(() => {
-    //为账号地址起名
+    // 为账号地址起名
     DB.run(`CREATE TABLE IF NOT EXISTS BULLETINS(
       hash VARCHAR(32) PRIMARY KEY,
       pre_hash VARCHAR(32),
@@ -235,9 +233,6 @@ function initDB() {
   })
 }
 
-////////hard copy from client<<<<<<<<
-const crypto = require("crypto")
-
 const keypair = oxoKeyPairs.deriveKeypair(Seed)
 const Address = oxoKeyPairs.deriveAddress(keypair.publicKey)
 const PublicKey = keypair.publicKey
@@ -257,20 +252,20 @@ function signJson(json) {
 
 function genDeclare() {
   let json = {
-    "Action": ActionCode.Declare,
-    "Timestamp": new Date().getTime(),
-    "PublicKey": PublicKey
+    Action: ActionCode.Declare,
+    Timestamp: new Date().getTime(),
+    PublicKey: PublicKey
   }
   return JSON.stringify(signJson(json))
 }
 
 function genObjectResponse(object, to) {
   let json = {
-    "Action": ActionCode.ObjectResponse,
-    "Object": object,
-    "To": to,
-    "Timestamp": Date.now(),
-    "PublicKey": PublicKey,
+    Action: ActionCode.ObjectResponse,
+    Object: object,
+    To: to,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey,
   }
   let sig = sign(JSON.stringify(json), PrivateKey)
   json.Signature = sig
@@ -280,12 +275,12 @@ function genObjectResponse(object, to) {
 
 function genBulletinRequest(address, sequence, to) {
   let json = {
-    "Action": ActionCode.BulletinRequest,
-    "Address": address,
-    "Sequence": sequence,
-    "To": to,
-    "Timestamp": Date.now(),
-    "PublicKey": PublicKey
+    Action: ActionCode.BulletinRequest,
+    Address: address,
+    Sequence: sequence,
+    To: to,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey
   }
   return JSON.stringify(signJson(json))
 }
@@ -304,35 +299,35 @@ function genBulletinFileChunkRequest(hash, chunk_cursor, to) {
 
 function genBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
   let json = {
-    "ObjectType": ObjectType.Bulletin,
-    "Sequence": sequence,
-    "PreHash": pre_hash,
-    "Quote": quote,
-    "File": file,
-    "Content": content,
-    "Timestamp": timestamp,
-    "PublicKey": PublicKey
+    ObjectType: ObjectType.Bulletin,
+    Sequence: sequence,
+    PreHash: pre_hash,
+    Quote: quote,
+    File: file,
+    Content: content,
+    Timestamp: timestamp,
+    PublicKey: PublicKey
   }
   return signJson(json)
 }
 
 function genBulletinAddressListRequest(page) {
   let json = {
-    "Action": ActionCode.BulletinAddressListRequest,
-    "Page": page,
-    "Timestamp": Date.now(),
-    "PublicKey": PublicKey
+    Action: ActionCode.BulletinAddressListRequest,
+    Page: page,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey
   }
   return JSON.stringify(signJson(json))
 }
 
 function genBulletinReplyListRequest(hash, page) {
   let json = {
-    "Action": ActionCode.BulletinReplyListRequest,
-    "Hash": hash,
-    "Page": page,
-    "Timestamp": Date.now(),
-    "PublicKey": PublicKey
+    Action: ActionCode.BulletinReplyListRequest,
+    Hash: hash,
+    Page: page,
+    Timestamp: Date.now(),
+    PublicKey: PublicKey
   }
   return signJson(json)
 }
@@ -409,11 +404,11 @@ function handleMessage(message) {
   let json = JSON.parse(message)
   console.log(json)
   if (json["To"] != null) {
-    //cache bulletin
+    // cache bulletin
     if (json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.Bulletin) {
       CacheBulletin(json.Object)
     } else if (json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.BulletinFileChunk) {
-      //cache bulletin file
+      // cache bulletin file
       let address = oxoKeyPairs.deriveAddress(json.PublicKey)
       let SQL = `SELECT * FROM FILES WHERE hash = "${json.Object.Hash}"`
       DB.get(SQL, (err, bulletin_file) => {
@@ -465,7 +460,7 @@ function handleMessage(message) {
   }
 
   if (json.Action == ActionCode.BulletinRequest) {
-    //send cache bulletin
+    // send cache bulletin
     let SQL = `SELECT * FROM BULLETINS WHERE address = "${json.Address}" AND sequence = "${json.Sequence}"`
     DB.get(SQL, (err, item) => {
       if (err) {
@@ -503,7 +498,7 @@ function handleMessage(message) {
     })
   } else if (json["To"] == Address && json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.Bulletin) {
     CacheBulletin(json.Object)
-    //fetch more bulletin
+    // fetch more bulletin
     let msg = genBulletinRequest(Address, json.Object.Sequence + 1, Address)
     sendMessage(msg)
   } else if (json.Action == ActionCode.BulletinAddressListResponse) {
