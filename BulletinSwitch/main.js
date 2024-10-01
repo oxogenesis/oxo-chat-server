@@ -576,9 +576,7 @@ function keepServerConn() {
   }
 }
 
-if (jobServerConn == null) {
-  jobServerConn = setInterval(keepServerConn, 8000);
-}
+
 
 // client server
 let ClientServer = null
@@ -607,4 +605,14 @@ function startClientServer() {
   }
 }
 
-startClientServer()
+
+function go() {
+  bulletinStat()
+  startClientServer()
+
+  if (jobServerConn == null) {
+    jobServerConn = setInterval(keepServerConn, 8000);
+  }
+}
+
+go()
