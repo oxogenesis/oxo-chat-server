@@ -1,12 +1,15 @@
 const oxoKeyPairs = require("oxo-keypairs")
-const { StrToHex } = require('./Util.js')
+const { StrToHex, QuarterSHA512 } = require('./Util.js')
 
-// const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
+// const GenesisHash = QuarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
+const GenesisAddress = 'obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf'
 const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
 
 const FileMaxSize = 16 * 1024 * 1024
 const FileChunkSize = 64 * 1024
 const BulletinFileExtRegex = /jpg|png|jpeg|txt|md/i
+
+const PageSize = 20
 
 const ActionCode = {
   Declare: 100,
@@ -44,6 +47,19 @@ const ObjectType = {
   GroupFile: 303
 }
 
+const MessageCode = {
+  JsonSchemaInvalid: 0, //json schema invalid...
+  SignatureInvalid: 1, //signature invalid...
+  TimestampInvalid: 2, //timestamp invalid...
+  BalanceInsufficient: 3, //balance insufficient...
+  NewConnectionOpening: 4, //address changed...
+  AddressChanged: 5, //new connection with same address is opening...
+  ToSelfIsForbidden: 6, //To self is forbidden...
+  ToNotExist: 7, //To not exist...
+
+  GatewayDeclareSuccess: 1000 //gateway declare success...
+}
+
 // oxo
 function sign(msg, sk) {
   let msgHexStr = StrToHex(msg)
@@ -74,13 +90,13 @@ function VerifyJsonSignature(json) {
     json.Signature = sig
     return true
   } else {
-    console.log('signature invalid...')
+    console.log('json signature invalid...')
     return false
   }
 }
 
 function VerifyBulletinJson(bulletin) {
-  let content_hash = quarterSHA512(bulletin.Content)
+  let content_hash = QuarterSHA512(bulletin.Content)
   let tmp_json = {
     ObjectType: ObjectType.Bulletin,
     Sequence: bulletin.Sequence,
@@ -154,7 +170,7 @@ function GenBulletinFileChunkJson(hash, chunk_cursor, content) {
 }
 
 function GenBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
-  let content_hash = quarterSHA512(content)
+  let content_hash = QuarterSHA512(content)
   let tmp_json = {
     ObjectType: ObjectType.Bulletin,
     Sequence: sequence,
@@ -191,11 +207,40 @@ function GenBulletinAddressListRequest(page, pk, sk) {
   return JSON.stringify(signJson(json, sk))
 }
 
-function GenBulletinAddressListResponse(page, address_list) {
+function GenBulletinAddressListResponse(page, address_list, SelfPublicKey, SelfPrivateKey) {
   let json = {
     Action: ActionCode.BulletinAddressListResponse,
     Page: page,
-    List: address_list
+    List: address_list,
+    Timestamp: Date.now(),
+    PublicKey: SelfPublicKey
+  }
+  let sig = sign(JSON.stringify(json), SelfPrivateKey)
+  json.Signature = sig
+  let strJson = JSON.stringify(json)
+  return strJson
+}
+
+function GenChatSync(pair_address, current_sequence, pk, sk) {
+  let json = {
+    Action: ActionCode.ChatSyncFromServer,
+    PairAddress: pair_address,
+    CurrentSequence: current_sequence,
+    Timestamp: Date.now(),
+    PublicKey: pk,
+  }
+  let sig = sign(JSON.stringify(json), sk)
+  json.Signature = sig
+  let strJson = JSON.stringify(json)
+  return strJson
+}
+
+function GenBulletinReplyListResponse(hash, page, reply_list) {
+  let json = {
+    Action: ActionCode.BulletinReplyListResponse,
+    Hash: hash,
+    Page: page,
+    List: reply_list
   }
   let strJson = JSON.stringify(json)
   return strJson
@@ -208,13 +253,20 @@ module.exports = {
   FileChunkSize,
   BulletinFileExtRegex,
 
+  PageSize,
+
   ActionCode,
   ObjectType,
+  MessageCode,
 
   VerifyJsonSignature,
+  VerifyBulletinJson,
   GenDeclare,
   GenBulletinAddressListRequest,
+  GenBulletinAddressListResponse,
   GenBulletinRequest,
   GenBulletinFileChunkRequest,
-  GenObjectResponse
+  GenObjectResponse,
+  GenChatSync,
+  GenBulletinReplyListResponse
 }

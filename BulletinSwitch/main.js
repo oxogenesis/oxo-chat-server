@@ -1,9 +1,8 @@
 const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./Util.js')
-const { ActionCode, ObjectType, GenDeclare, GenBulletinAddressListRequest, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, FileChunkSize } = require('./OXO.js')
+const { ActionCode, ObjectType, GenDeclare, GenBulletinAddressListRequest, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, FileChunkSize, VerifyBulletinJson } = require('./OXO.js')
 const { CheckMessageSchema } = require('./Schema.js')
 
 const fs = require('fs')
-const Crypto = require('crypto')
 const path = require('path')
 const sqlite3 = require('sqlite3')
 const WebSocket = require('ws')
@@ -261,7 +260,7 @@ function fetchUnsaveFile(address) {
 function CacheBulletin(ws, bulletin) {
   let address = oxoKeyPairs.deriveAddress(bulletin.PublicKey)
 
-  if (VerifyJsonSignature(bulletin)) {
+  if (VerifyBulletinJson(bulletin)) {
     let timestamp = Date.now()
     let hash = QuarterSHA512(JSON.stringify(bulletin))
     let SQL = `INSERT INTO BULLETINS (hash, pre_hash, address, sequence, content, quote, file, json, signed_at, created_at)
@@ -457,7 +456,7 @@ function handleMessage(address, json) {
 
 function checkMessage(ws, message) {
   // ConsoleInfo(`###################LOG################### Client Message:`)
-  // ConsoleInfo(message)
+  ConsoleInfo(message)
   // ConsoleInfo(`${message.slice(0, 512)}`)
   let json = CheckMessageSchema(message)
   if (json == false) {
@@ -564,6 +563,7 @@ function keepServerConn() {
       notConnected.push(server)
     }
   })
+  ConsoleWarn(notConnected)
 
   if (notConnected.length == 0) {
     return
@@ -604,7 +604,6 @@ function startClientServer() {
     })
   }
 }
-
 
 function go() {
   bulletinStat()
