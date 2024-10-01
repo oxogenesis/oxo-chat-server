@@ -456,7 +456,7 @@ function handleMessage(address, json) {
 
 function checkMessage(ws, message) {
   // ConsoleInfo(`###################LOG################### Client Message:`)
-  ConsoleInfo(message)
+  // ConsoleInfo(message)
   // ConsoleInfo(`${message.slice(0, 512)}`)
   let json = CheckMessageSchema(message)
   if (json == false) {
@@ -563,7 +563,8 @@ function keepServerConn() {
       notConnected.push(server)
     }
   })
-  ConsoleWarn(notConnected)
+
+  // ConsoleWarn(notConnected)
 
   if (notConnected.length == 0) {
     return
@@ -610,7 +611,7 @@ function go() {
   startClientServer()
 
   if (jobServerConn == null) {
-    jobServerConn = setInterval(keepServerConn, 8000);
+    jobServerConn = setInterval(keepServerConn, 8000)
   }
 }
 
