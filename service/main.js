@@ -9,11 +9,10 @@ const Schema = require("./schema.js")
 const prisma = new PrismaClient()
 
 
-//config
-const SelfURL = "ws://127.0.0.1:8000"
-//standalone server
+// config
+// standalone server
 // const Seed = oxoKeyPairs.generateSeed("obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf", "secp256k1")
-// const SelfURL = "wss://ru.oxo-chat-server.com"
+const SelfURL = "wss://ru.oxo-chat-server.com"
 const Seed = "xxJTfMGZPavnqHhcEcHw5ToPCHftw"
 const OtherServer = []
 
@@ -273,8 +272,12 @@ function GenBulletinAddressListResponse(page, address_list) {
   let json = {
     Action: ActionCode.BulletinAddressListResponse,
     Page: page,
-    List: address_list
+    List: address_list,
+    Timestamp: Date.now(),
+    PublicKey: ServerPublicKey
   }
+  let sig = sign(JSON.stringify(json), ServerPrivateKey)
+  json.Signature = sig
   let strJson = JSON.stringify(json)
   return strJson
 }
@@ -322,6 +325,7 @@ function GenDeclare() {
   //send declare to server
   let json = {
     Action: ActionCode.Declare,
+    URL: SelfURL,
     Timestamp: Date.now(),
     PublicKey: ServerPublicKey
   }
@@ -846,6 +850,9 @@ async function checkClientMessage(ws, message) {
           console.log(`connection established from client <${address}>`)
           ClientConns[address] = ws
           //handleClientMessage(message, json)
+          if (json.URL != null) {
+            ClientConns[address].send(GenDeclare())
+          }
 
           // 获取最新bulletin
           let bulletin = await prisma.BULLETINS.findFirst({
