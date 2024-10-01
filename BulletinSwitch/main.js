@@ -207,6 +207,57 @@ function bulletinStat() {
 }
 
 // function
+function fetchNextBulletin(ws, address) {
+  let SQL = `SELECT * FROM BULLETINS WHERE address = "${address}" ORDER BY sequence DESC`
+  DB.get(SQL, (err, item) => {
+    if (err) {
+      ConsoleError(err)
+    } else {
+      let local_seq = 0
+      if (item != null) {
+        local_seq = item.sequence
+      }
+      let msg = GenBulletinRequest(address, local_seq + 1, address, SelfPublicKey, SelfPrivateKey)
+      sendMessage(ws, msg)
+    }
+  })
+}
+
+function fetchUnsaveFile(address) {
+  let SQL = `SELECT file FROM BULLETINS`
+  DB.all(SQL, (err, bulletins) => {
+    if (err) {
+      ConsoleError(err)
+    } else {
+      let file_hash_list = []
+      bulletins.forEach(bulletin => {
+        if (bulletin.file != 'undefined') {
+          let file_list = JSON.parse(bulletin.file)
+          if (file_list && file_list.length != 0) {
+            file_list.forEach(file => {
+              file_hash_list.push(file.Hash)
+            })
+          }
+        }
+      })
+      file_hash_list = UniqArray(file_hash_list)
+
+      SQL = `SELECT * FROM FILES hash IN (${file_hash_list}) AND chunk_length > chunk_cursor`
+      DB.all(SQL, (err, files) => {
+        if (err) {
+          ConsoleError(err)
+        } else {
+          ConsoleInfo('file_list', files)
+          files.forEach(file => {
+            let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
+            Conns[address].send(msg)
+          })
+        }
+      })
+    }
+  })
+}
+
 function CacheBulletin(ws, bulletin) {
   let address = oxoKeyPairs.deriveAddress(bulletin.PublicKey)
 
@@ -257,11 +308,23 @@ function CacheBulletin(ws, bulletin) {
               } else {
                 if (item == null) {
                   SQL = `INSERT INTO QUOTES (main_hash, quote_hash, address, sequence, content, signed_at)
-                  VALUES ('${quote.Hash}', '${hash}', '${address}', ${bulletin.Sequence}, '${bulletin.Content}', ${bulletin.Timestamp})`
+                    VALUES ('${quote.Hash}', '${hash}', '${address}', ${bulletin.Sequence}, '${bulletin.Content}', ${bulletin.Timestamp})`
                   DB.run(SQL, err => {
                     if (err) {
                       ConsoleError(err)
                     } else {
+                    }
+                  })
+
+                  SQL = `SELECT * FROM BULLETINS WHERE hash = "${quote.Hash}"`
+                  DB.get(SQL, (err, quote_bulletin) => {
+                    if (err) {
+                      ConsoleError(err)
+                    } else {
+                      if (quote_bulletin == null) {
+                        // 被引用公告未被缓存
+                        fetchNextBulletin(ws, quote.Address)
+                      }
                     }
                   })
                 }
@@ -281,7 +344,7 @@ function CacheBulletin(ws, bulletin) {
 }
 
 function handleMessage(address, json) {
-  ConsoleInfo(json)
+  // ConsoleInfo(json)
   if (json.To != null) {
     // cache bulletin
     if (json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.Bulletin) {
@@ -352,7 +415,7 @@ function handleMessage(address, json) {
           ConsoleInfo(`response <<< ${json.Address}#${json.Sequence}`)
         } else {
           ConsoleInfo(`not found === ${json.Address}#${json.Sequence}`)
-          SQL = `SELECT * FROM BULLETINS WHERE address = "${json.Address}" ORDER BY sequence DESC LIMIT 1`
+          SQL = `SELECT * FROM BULLETINS WHERE address = "${json.Address}" ORDER BY sequence DESC`
           DB.get(SQL, (err, item) => {
             if (err) {
               ConsoleError(err)
@@ -382,19 +445,7 @@ function handleMessage(address, json) {
     if (account_list.length > 0) {
       for (let i = 0; i < account_list.length; i++) {
         const account = account_list[i]
-        SQL = `SELECT * FROM BULLETINS WHERE address = "${account.Address}" ORDER BY sequence DESC LIMIT 1`
-        DB.get(SQL, (err, bulletin) => {
-          if (err) {
-            ConsoleError(err)
-          } else {
-            let next_sequence = 1
-            if (bulletin) {
-              next_sequence = bulletin.sequence + 1
-            }
-            let msg = GenBulletinRequest(account.Address, next_sequence, account.Address, SelfPublicKey, SelfPrivateKey)
-            sendMessage(Conns[address], msg)
-          }
-        })
+        fetchNextBulletin(Conns[address], account.Address)
       }
 
       let next_page = json.Page + 1
@@ -460,53 +511,10 @@ function checkMessage(ws, message) {
           // handleMessage(message, json)
 
           // 获取最新bulletin
-          SQL = `SELECT * FROM BULLETINS WHERE address = "${address}" ORDER BY sequence DESC LIMIT 1`
-          DB.get(SQL, (err, item) => {
-            if (err) {
-              ConsoleError(err)
-            } else {
-              let local_seq = 1
-              if (item != null) {
-                local_seq = item.sequence + 1
-              }
-              let msg = GenBulletinRequest(address, local_seq, address, SelfPublicKey, SelfPrivateKey)
-              sendMessage(ws, msg)
-            }
-          })
+          fetchNextBulletin(ws, address)
 
           // 获取未缓存的bulletin文件
-          SQL = `SELECT file FROM BULLETINS`
-          DB.all(SQL, (err, bulletins) => {
-            if (err) {
-              ConsoleError(err)
-            } else {
-              let file_hash_list = []
-              bulletins.forEach(bulletin => {
-                if (bulletin.file != 'undefined') {
-                  let file_list = JSON.parse(bulletin.file)
-                  if (file_list && file_list.length != 0) {
-                    file_list.forEach(file => {
-                      file_hash_list.push(file.Hash)
-                    })
-                  }
-                }
-              })
-              file_hash_list = UniqArray(file_hash_list)
-
-              SQL = `SELECT * FROM FILES hash IN (${file_hash_list}) AND chunk_length > chunk_cursor`
-              DB.all(SQL, (err, files) => {
-                if (err) {
-                  ConsoleError(err)
-                } else {
-                  ConsoleInfo('file_list', files)
-                  files.forEach(file => {
-                    let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
-                    Conns[address].send(msg)
-                  })
-                }
-              })
-            }
-          })
+          fetchUnsaveFile(ws)
         } else if (Conns[address] != ws && Conns[address].readyState == WebSocket.OPEN) {
           // new connection kick old conection with same address
           // 当前地址有对应连接，断开旧连接，当前地址对应到当前连接
