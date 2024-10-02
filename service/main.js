@@ -1,79 +1,39 @@
+const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./Util.js')
+const { ActionCode, ObjectType, GenesisHash, PageSize, GenDeclare, GenBulletinAddressListRequest, GenBulletinAddressListResponse, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, GenChatSync, GenBulletinReplyListResponse, FileChunkSize, VerifyBulletinJson } = require('./OXO.js')
+const { CheckMessageSchema } = require('./Schema.js')
+
 const fs = require('fs')
-const Crypto = require('crypto')
 const path = require('path')
-const WebSocket = require("ws")
+const WebSocket = require('ws')
 const oxoKeyPairs = require("oxo-keypairs")
 const { PrismaClient } = require("@prisma/client")
-const Schema = require("./schema.js")
 
 const prisma = new PrismaClient()
 
 
 // config
 // standalone server
-// const Seed = oxoKeyPairs.generateSeed("obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf", "secp256k1")
 const SelfURL = "wss://ru.oxo-chat-server.com"
 const Seed = "xxJTfMGZPavnqHhcEcHw5ToPCHftw"
-const OtherServer = []
+const keypair = oxoKeyPairs.deriveKeypair(Seed)
+const SelfAddress = oxoKeyPairs.deriveAddress(keypair.publicKey)
+const SelfPublicKey = keypair.publicKey
+const SelfPrivateKey = keypair.privateKey
+
+const Servers = [
+  // {
+  //   URL: "wss://ru.oxo-chat-server.com",
+  //   Address: "ospxTHwV9YJEq5g6h3MZy9ASs8EP3vY4L6"
+  // }
+]
 
 //keep alive
 process.on("uncaughtException", function (err) {
   //打印出错误
-  console.log(err)
+  ConsoleError(err)
   //打印出错误的调用栈方便调试
-  console.log(err.stack)
+  ConsoleError(err.stack)
 })
-
-//json
-
-function cloneJson(json) {
-  return JSON.parse(JSON.stringify(json))
-}
-
-function toSetUniq(arr) {
-  return Array.from(new Set(arr))
-}
-
-//ws
-
-//crypto
-function hasherSHA512(str) {
-  let sha512 = Crypto.createHash("sha512")
-  sha512.update(str)
-  return sha512.digest("hex")
-}
-
-function halfSHA512(str) {
-  return hasherSHA512(str).toUpperCase().substring(0, 64)
-}
-
-function quarterSHA512(str) {
-  return hasherSHA512(str).toUpperCase().substring(0, 32);
-}
-
-function genFileHashSync(file_path) {
-  let file_content
-  try {
-    file_content = fs.readFileSync(file_path)
-  } catch (err) {
-    console.error(err)
-    return null
-  }
-
-  const sha1 = Crypto.createHash('sha1')
-  sha1.update(file_content)
-  return sha1.digest('hex').toUpperCase()
-}
-
-//oxo
-
-//const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
-const GenesisAddress = 'obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf'
-const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
-
-const FileMaxSize = 16 * 1024 * 1024
-const FileChunkSize = 64 * 1024
-const BulletinFileExtRegex = /jpg|png|jpeg|txt|md/i
 
 async function DelayExec(ms) {
   return new Promise(resolve => {
@@ -81,263 +41,117 @@ async function DelayExec(ms) {
   })
 }
 
-function Array2Str(array) {
-  let tmpArray = []
-  for (let i = array.length - 1; i >= 0; i--) {
-    tmpArray.push(`"${array[i]}"`)
-  }
-  return tmpArray.join(',')
-}
-
-function strToHex(str) {
-  let arr = []
-  let length = str.length
-  for (let i = 0; i < length; i++) {
-    arr[i] = (str.charCodeAt(i).toString(16))
-  }
-  return arr.join("").toUpperCase()
-}
-
-function sign(msg, sk) {
-  let msgHexStr = strToHex(msg)
-  let sig = oxoKeyPairs.sign(msgHexStr, sk)
-  return sig
-}
-
-function verifySignature(msg, sig, pk) {
-  let hexStrMsg = strToHex(msg)
-  try {
-    return oxoKeyPairs.verify(hexStrMsg, sig, pk)
-  } catch (e) {
-    return false
-  }
-}
-
-function VerifyJsonSignature(json) {
-  let sig = json.Signature
-  delete json.Signature
-  let tmpMsg = JSON.stringify(json)
-  if (verifySignature(tmpMsg, sig, json.PublicKey)) {
-    json.Signature = sig
-    return true
-  } else {
-    console.log("signature invalid...")
-    return false
-  }
-}
-
-let ActionCode = {
-  Declare: 100,
-  ObjectResponse: 101,
-
-  BulletinRandom: 200,
-  BulletinRequest: 201,
-  BulletinFileChunkRequest: 202,
-  BulletinAddressListRequest: 203,
-  BulletinAddressListResponse: 204,
-  BulletinReplyListRequest: 205,
-  BulletinReplyListResponse: 206,
-
-  ChatDH: 301,
-  ChatMessage: 302,
-  ChatSync: 303,
-  PrivateFileRequest: 304,
-  ChatSyncFromServer: 305,
-
-  GroupRequest: 401,
-  GroupManageSync: 402,
-  GroupDH: 403,
-  GroupMessageSync: 404,
-  GroupFileRequest: 405
-}
-
-//message
-const MessageCode = {
-  JsonSchemaInvalid: 0, //json schema invalid...
-  SignatureInvalid: 1, //signature invalid...
-  TimestampInvalid: 2, //timestamp invalid...
-  BalanceInsufficient: 3, //balance insufficient...
-  NewConnectionOpening: 4, //address changed...
-  AddressChanged: 5, //new connection with same address is opening...
-  ToSelfIsForbidden: 6, //To self is forbidden...
-  ToNotExist: 7, //To not exist...
-
-  GatewayDeclareSuccess: 1000 //gateway declare success...
-}
-
-const ObjectType = {
-  Bulletin: 101,
-  BulletinFileChunk: 102,
-
-  PrivateFile: 201,
-
-  GroupManage: 301,
-  GroupMessage: 302,
-  GroupFile: 303
-}
-
-function strServerMessage(msgCode) {
-  msgJson = { Action: ActionCode.ServerMessage, Code: msgCode }
-  return JSON.stringify(msgJson)
-}
-
-function sendServerMessage(ws, msgCode) {
-  ws.send(strServerMessage(msgCode))
-}
+// function sendServerMessage(ws, msgCode) {
+//   ws.send(strServerMessage(msgCode))
+// }
 
 //client connection
-let ClientConns = {}
+let Conns = {}
 
-function fetchClientConnAddress(ws) {
-  for (let address in ClientConns) {
-    if (ClientConns[address] == ws) {
+function fetchConnAddress(ws) {
+  for (let address in Conns) {
+    if (Conns[address] == ws) {
       return address
     }
   }
   return null
 }
 
-let ClientServer = null
+
 
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 //client listener
-function teminateClientConn(ws) {
+function teminateConn(ws) {
   ws.close()
-  let connAddress = fetchClientConnAddress(ws)
+  let connAddress = fetchConnAddress(ws)
   if (connAddress != null) {
-    console.log(`###################LOG################### client disconnect... <${connAddress}>`)
-    delete ClientConns[connAddress]
+    ConsoleWarn(`###################LOG################### client disconnect... <${connAddress}>`)
+    delete Conns[connAddress]
   }
 }
 
-////////hard copy from client<<<<<<<<
-// let BulletinCount = 0
-const PageSize = 20
-// let PageCount = BulletinCount / PageSize
-// let PageLinks = ""
-// let BulletinAccounts = []
-
-const keypair = oxoKeyPairs.deriveKeypair(Seed)
-const ServerAddress = oxoKeyPairs.deriveAddress(keypair.publicKey)
-const ServerPublicKey = keypair.publicKey
-const ServerPrivateKey = keypair.privateKey
-
-function sign(msg, sk) {
-  let msgHexStr = strToHex(msg);
-  let sig = oxoKeyPairs.sign(msgHexStr, sk);
-  return sig;
+function pullBulletin(ws) {
+  // clone all bulletin from server
+  // pull step 1: fetch all account
+  let msg = GenBulletinAddressListRequest(1, SelfPublicKey, SelfPrivateKey)
+  sendMessage(ws, msg)
 }
 
-function GenBulletinRequest(address, sequence, to) {
-  let json = {
-    Action: ActionCode.BulletinRequest,
-    Address: address,
-    Sequence: sequence,
-    To: to,
-    Timestamp: Date.now(),
-    PublicKey: ServerPublicKey
-  }
-  let sig = sign(JSON.stringify(json), ServerPrivateKey)
-  json.Signature = sig
-  let strJson = JSON.stringify(json)
-  return strJson
+function pushBulletin(ws) {
+  let SQL = `SELECT address, sequence FROM BULLETINS`
+  DB.all(SQL, (err, items) => {
+    if (err) {
+      ConsoleError(err)
+    } else {
+      let bulletin_sequence = {}
+      items.forEach(item => {
+        if (bulletin_sequence[item.address] == null) {
+          bulletin_sequence[item.address] = item.sequence
+        } else if (bulletin_sequence[item.address] < item.sequence) {
+          bulletin_sequence[item.address] = item.sequence
+        }
+      })
+
+
+      for (const address in bulletin_sequence) {
+        let msg = GenBulletinRequest(address, bulletin_sequence[address] + 1, address, SelfPublicKey, SelfPrivateKey)
+        sendMessage(ws, msg)
+      }
+    }
+  })
 }
 
-function GenBulletinFileChunkRequest(hash, chunk_cursor, to) {
-  let json = {
-    Action: ActionCode.BulletinFileChunkRequest,
-    Hash: hash,
-    Cursor: chunk_cursor,
-    To: to,
-    Timestamp: Date.now(),
-    PublicKey: ServerPublicKey
-  }
-  let sig = sign(JSON.stringify(json), ServerPrivateKey)
-  json.Signature = sig
-  let strJson = JSON.stringify(json)
-  return strJson
+function downloadBulletinFile(address) {
+  let SQL = `SELECT * FROM FILES WHERE chunk_length != chunk_cursor`
+  DB.all(SQL, (err, files) => {
+    if (err) {
+      ConsoleError(err)
+    } else {
+      if (files && files.length > 0) {
+        ConsoleInfo(`--------------------------files to download--------------------------`)
+        ConsoleInfo(files)
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i]
+          let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
+          sendMessage(Conns[address], msg)
+        }
+      }
+    }
+  })
 }
 
-function GenBulletinFileChunkJson(hash, chunk_cursor, content) {
-  let json = {
-    "ObjectType": ObjectType.BulletinFileChunk,
-    "Hash": hash,
-    "Cursor": chunk_cursor,
-    "Content": content
-  }
-  return json
-}
+function bulletinStat() {
+  let SQL = `SELECT * FROM BULLETINS`
+  DB.all(SQL, (err, items) => {
+    if (err) {
+      ConsoleError(err)
+    } else {
+      ConsoleInfo(`BulletinCount: ${items.length}`)
+    }
+  })
 
-function GenBulletinAddressListResponse(page, address_list) {
-  let json = {
-    Action: ActionCode.BulletinAddressListResponse,
-    Page: page,
-    List: address_list,
-    Timestamp: Date.now(),
-    PublicKey: ServerPublicKey
-  }
-  let sig = sign(JSON.stringify(json), ServerPrivateKey)
-  json.Signature = sig
-  let strJson = JSON.stringify(json)
-  return strJson
-}
+  SQL = `SELECT * FROM FILES`
+  DB.all(SQL, (err, items) => {
+    if (err) {
+      ConsoleError(err)
+    } else {
+      ConsoleInfo(`****FileCount: ${items.length}`)
+    }
+  })
 
-function GenBulletinReplyListResponse(hash, page, reply_list) {
-  let json = {
-    Action: ActionCode.BulletinReplyListResponse,
-    Hash: hash,
-    Page: page,
-    List: reply_list
-  }
-  let strJson = JSON.stringify(json)
-  return strJson
-}
-
-function GenObjectResponse(object, to) {
-  let json = {
-    Action: ActionCode.ObjectResponse,
-    Object: object,
-    To: to,
-    Timestamp: Date.now(),
-    PublicKey: ServerPublicKey,
-  }
-  let sig = sign(JSON.stringify(json), ServerPrivateKey)
-  json.Signature = sig
-  let strJson = JSON.stringify(json)
-  return strJson
-}
-
-function GenChatSync(pair_address, current_sequence) {
-  let json = {
-    Action: ActionCode.ChatSyncFromServer,
-    PairAddress: pair_address,
-    CurrentSequence: current_sequence,
-    Timestamp: Date.now(),
-    PublicKey: ServerPublicKey,
-  }
-  let sig = sign(JSON.stringify(json), ServerPrivateKey)
-  json.Signature = sig
-  let strJson = JSON.stringify(json)
-  return strJson
-}
-
-function GenDeclare() {
-  //send declare to server
-  let json = {
-    Action: ActionCode.Declare,
-    URL: SelfURL,
-    Timestamp: Date.now(),
-    PublicKey: ServerPublicKey
-  }
-  let sig = sign(JSON.stringify(json), ServerPrivateKey)
-  json.Signature = sig
-  let strJson = JSON.stringify(json)
-  return strJson
+  SQL = `SELECT * FROM BULLETINS GROUP BY address`
+  DB.all(SQL, (err, items) => {
+    if (err) {
+      ConsoleError(err)
+    } else {
+      ConsoleInfo(`*AddressCount: ${items.length}`)
+    }
+  })
 }
 
 async function CacheBulletin(bulletin) {
   let timestamp = Date.now()
-  let hash = quarterSHA512(JSON.stringify(bulletin))
+  let hash = QuarterSHA512(JSON.stringify(bulletin))
   let address = oxoKeyPairs.deriveAddress(bulletin.PublicKey)
 
   let b = await prisma.BULLETINS.findFirst({
@@ -407,16 +221,16 @@ async function CacheBulletin(bulletin) {
           })
         }
         if (f.chunk_cursor < f.chunk_length) {
-          let msg = GenBulletinFileChunkRequest(f.hash, f.chunk_cursor + 1, address)
-          ClientConns[address].send(msg)
+          let msg = GenBulletinFileChunkRequest(f.hash, f.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
+          Conns[address].send(msg)
         }
       })
 
       //Brocdcast to OtherServer
       for (let i in OtherServer) {
-        let ws = ClientConns[OtherServer[i].Address]
+        let ws = Conns[OtherServer[i].Address]
         if (ws != undefined && ws.readyState == WebSocket.OPEN) {
-          ws.send(GenObjectResponse(bulletin, OtherServer[i].Address))
+          ws.send(GenObjectResponse(bulletin, OtherServer[i].Address, SelfPublicKey, SelfPrivateKey))
         }
       }
     }
@@ -534,16 +348,16 @@ async function HandelECDHSync(json) {
     // dh存在 对方握手消息已记录
     // 我未完成握手
     if (address1 == sour_address && dh.json2 != "") {
-      ClientConns[sour_address].send(`${dh.json2}`)
+      Conns[sour_address].send(`${dh.json2}`)
     } else if (address2 == sour_address && dh.json1 != "") {
-      ClientConns[sour_address].send(`${dh.json1}`)
+      Conns[sour_address].send(`${dh.json1}`)
     }
   }
 }
 
 async function CacheMessage(json) {
   let str_json = JSON.stringify(json)
-  let hash = quarterSHA512(str_json)
+  let hash = QuarterSHA512(str_json)
   let sour_address = oxoKeyPairs.deriveAddress(json.PublicKey)
   let dest_address = json.To
   let msg_list = await prisma.MESSAGES.findMany({
@@ -580,7 +394,7 @@ async function CacheMessage(json) {
       current_sequence = msg_list_length
     }
     let msg = GenChatSync(dest_address, current_sequence)
-    ClientConns[sour_address].send(`${msg}`)
+    Conns[sour_address].send(`${msg}`)
   }
 }
 
@@ -604,16 +418,16 @@ async function HandelChatSync(json) {
   let msg_list_length = msg_list.length
   for (let i = 0; i < msg_list_length; i++) {
     await DelayExec(1000)
-    ClientConns[dest_address].send(`${msg_list[i].json}`)
+    Conns[dest_address].send(`${msg_list[i].json}`)
   }
 }
 
-async function handleClientMessage(message, json) {
+async function handleMessage(message, json) {
   if (json.To != null) {
-    if (ClientConns[json.To] != null && ClientConns[json.To].readyState == WebSocket.OPEN) {
+    if (Conns[json.To] != null && Conns[json.To].readyState == WebSocket.OPEN) {
       // 對方在綫
       //forward message
-      ClientConns[json.To].send(`${message}`)
+      Conns[json.To].send(`${message}`)
     }
 
     if (json.Action == ActionCode.ChatMessage) {
@@ -629,17 +443,17 @@ async function handleClientMessage(message, json) {
       if (json.Object.ObjectType == ObjectType.Bulletin) {
         //cache bulletin
         CacheBulletin(json.Object)
-        if (json.To == ServerAddress) {
+        if (json.To == SelfAddress) {
           //fetch more bulletin
           let address = oxoKeyPairs.deriveAddress(json.Object.PublicKey)
-          if (ClientConns[address] != null && ClientConns[address].readyState == WebSocket.OPEN) {
-            let msg = GenBulletinRequest(address, json.Object.Sequence + 1, address)
-            ClientConns[address].send(msg)
+          if (Conns[address] != null && Conns[address].readyState == WebSocket.OPEN) {
+            let msg = GenBulletinRequest(address, json.Object.Sequence + 1, address, SelfPublicKey, SelfPrivateKey)
+            Conns[address].send(msg)
           }
         }
       } else if (json.Object.ObjectType == ObjectType.BulletinFileChunk) {
         //cache bulletin file
-        console.log(`BulletinFileChunk........................................`)
+        ConsoleInfo(`BulletinFileChunk........................................`)
         let bulletin_file = await prisma.FILES.findFirst({
           where: {
             hash: json.Object.Hash
@@ -667,11 +481,11 @@ async function handleClientMessage(message, json) {
           })
           if (current_chunk_cursor < bulletin_file.chunk_length) {
             let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-            let msg = GenBulletinFileChunkRequest(json.Object.Hash, current_chunk_cursor + 1, address)
-            ClientConns[address].send(msg)
+            let msg = GenBulletinFileChunkRequest(json.Object.Hash, current_chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
+            Conns[address].send(msg)
           } else {
             // compare hash
-            let hash = genFileHashSync(path.resolve(file_path))
+            let hash = FileHashSync(path.resolve(file_path))
             if (hash != json.Object.Hash) {
               fs.rmSync(path.resolve(file_path))
               await prisma.FILES.update({
@@ -702,7 +516,7 @@ async function handleClientMessage(message, json) {
     })
     if (bulletin != null) {
       let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-      ClientConns[address].send(bulletin.json)
+      Conns[address].send(bulletin.json)
     }
   } else if (json.Action == ActionCode.BulletinFileChunkRequest) {
     let file = await prisma.FILES.findFirst({
@@ -731,13 +545,13 @@ async function handleClientMessage(message, json) {
         let chunk = buffer.subarray(begin, end)
         // base64
         let content = chunk.toString('base64')
-        let object = GenBulletinFileChunkJson(json.Hash, json.Cursor, content)
-        let msg = GenObjectResponse(object, address)
-        ClientConns[address].send(msg)
-      } else if (json.To != "" && ClientConns[json.To]) {
+        let object = GenBulletinFileChunkJson(json.Hash, json.Cursor, content, SelfPublicKey, SelfPrivateKey)
+        let msg = GenObjectResponse(object, address, SelfPublicKey, SelfPrivateKey)
+        Conns[address].send(msg)
+      } else if (json.To != "" && Conns[json.To]) {
         // fetch file
-        let msg = GenBulletinFileChunkRequest(json.Hash, file.chunk_cursor + 1, json.To)
-        ClientConns[json.To].send(msg)
+        let msg = GenBulletinFileChunkRequest(json.Hash, file.chunk_cursor + 1, json.To, SelfPublicKey, SelfPrivateKey)
+        Conns[json.To].send(msg)
       }
     }
   } else if (json.Action == ActionCode.BulletinRandom) {
@@ -745,7 +559,7 @@ async function handleClientMessage(message, json) {
     let bulletin = await prisma.$queryRaw`SELECT * FROM "public"."BULLETINS" ORDER BY RANDOM() LIMIT 1`
     if (bulletin != null) {
       let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-      ClientConns[address].send(bulletin[0].json)
+      Conns[address].send(bulletin[0].json)
     }
   } else if (json.Action == ActionCode.BulletinAddressListRequest && json.Page > 0) {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
@@ -769,8 +583,8 @@ async function handleClientMessage(message, json) {
       new_item.Count = item._count.address
       address_list.push(new_item)
     })
-    let msg = GenBulletinAddressListResponse(json.Page, address_list)
-    ClientConns[address].send(msg)
+    let msg = GenBulletinAddressListResponse(json.Page, address_list, SelfPublicKey, SelfPrivateKey)
+    Conns[address].send(msg)
   } else if (json.Action == ActionCode.BulletinReplyListRequest && json.Page > 0) {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     let result = await prisma.QUOTES.findMany({
@@ -801,57 +615,57 @@ async function handleClientMessage(message, json) {
       reply_list.push(new_item)
     })
     let msg = GenBulletinReplyListResponse(json.Hash, json.Page, reply_list)
-    ClientConns[address].send(msg)
+    Conns[address].send(msg)
   }
 }
 
-async function checkClientMessage(ws, message) {
-  console.log(`###################LOG################### Client Message:`)
-  console.log(`${message.slice(0, 512)}`)
-  let json = Schema.checkClientSchema(message)
+async function checkMessage(ws, message) {
+  ConsoleInfo(`###################LOG################### Client Message:`)
+  ConsoleInfo(`${message.slice(0, 512)}`)
+  let json = CheckMessageSchema(message)
   if (json == false) {
     //json格式不合法
-    sendServerMessage(ws, MessageCode.JsonSchemaInvalid)
-    // console.log(`json格式不合法`)
-    teminateClientConn(ws)
+    // sendServerMessage(ws, MessageCode.JsonSchemaInvalid)
+    ConsoleWarn(`json格式不合法`)
+    teminateConn(ws)
   } else {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-    if (ClientConns[address] == ws) {
+    if (Conns[address] == ws) {
       // 连接已经通过"声明消息"校验过签名
       // "声明消息"之外的其他消息，由接收方校验
       // 伪造的"公告消息"无法通过接收方校验，也就无法被接受方看见（进而不能被引用），也就不具备传播能力
       // 伪造的"消息"无法通过接收方校验，也就无法被接受方看见
       // 所以服务器端只校验"声明消息"签名的有效性，并与之建立连接，后续消息无需校验签名，降低服务器运算压力
-      handleClientMessage(message, json)
+      handleMessage(message, json)
     } else {
-      let connAddress = fetchClientConnAddress(ws)
+      let connAddress = fetchConnAddress(ws)
       if (connAddress != null && connAddress != address) {
         //using different address in same connection
-        sendServerMessage(ws, MessageCode.AddressChanged)
-        teminateClientConn(ws)
+        // sendServerMessage(ws, MessageCode.AddressChanged)
+        teminateConn(ws)
       } else {
         if (!VerifyJsonSignature(json)) {
           //"声明消息"签名不合法
-          sendServerMessage(ws, MessageCode.SignatureInvalid)
-          teminateClientConn(ws)
+          // sendServerMessage(ws, MessageCode.SignatureInvalid)
+          teminateConn(ws)
           return
         }
 
         if (json.Timestamp + 60000 < Date.now()) {
           //"声明消息"生成时间过早
-          sendServerMessage(ws, MessageCode.TimestampInvalid)
-          teminateClientConn(ws)
+          // sendServerMessage(ws, MessageCode.TimestampInvalid)
+          teminateConn(ws)
           return
         }
 
-        if (connAddress == null && ClientConns[address] == null) {
+        if (connAddress == null && Conns[address] == null) {
           //new connection and new address
           //当前连接无对应地址，当前地址无对应连接，全新连接
-          console.log(`connection established from client <${address}>`)
-          ClientConns[address] = ws
-          //handleClientMessage(message, json)
+          ConsoleInfo(`connection established from client <${address}>`)
+          Conns[address] = ws
+          //handleMessage(message, json)
           if (json.URL != null) {
-            ClientConns[address].send(GenDeclare())
+            Conns[address].send(GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL))
           }
 
           // 获取最新bulletin
@@ -870,8 +684,8 @@ async function checkClientMessage(ws, message) {
           if (bulletin != null) {
             sequence = bulletin.sequence + 1
           }
-          let msg = GenBulletinRequest(address, sequence, address)
-          ClientConns[address].send(msg)
+          let msg = GenBulletinRequest(address, sequence, address, SelfPublicKey, SelfPrivateKey)
+          Conns[address].send(msg)
 
           // 获取未缓存的bulletin文件
           let bulletin_list = await prisma.BULLETINS.findMany({
@@ -888,7 +702,7 @@ async function checkClientMessage(ws, message) {
               })
             }
           })
-          file_hash_list = toSetUniq(file_hash_list)
+          file_hash_list = UniqArray(file_hash_list)
           let file_list = await prisma.FILES.findMany({
             where: {
               AND: {
@@ -901,28 +715,31 @@ async function checkClientMessage(ws, message) {
               }
             }
           })
-          console.log('file_list', file_list)
+          ConsoleInfo('file_list', file_list)
           file_list.forEach(async file => {
             if (file.chunk_cursor < file.chunk_length) {
-              let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address)
-              ClientConns[address].send(msg)
+              let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
+              Conns[address].send(msg)
             }
           })
-        } else if (ClientConns[address] != ws && ClientConns[address].readyState == WebSocket.OPEN) {
+        } else if (Conns[address] != ws && Conns[address].readyState == WebSocket.OPEN) {
           //new connection kick old conection with same address
           //当前地址有对应连接，断开旧连接，当前地址对应到当前连接
-          sendServerMessage(ClientConns[address], MessageCode.NewConnectionOpening)
-          ClientConns[address].close()
-          ClientConns[address] = ws
-          //handleClientMessage(message, json)
+          // sendServerMessage(Conns[address], MessageCode.NewConnectionOpening)
+          Conns[address].close()
+          Conns[address] = ws
+          //handleMessage(message, json)
         } else {
           ws.send("WTF...")
-          teminateClientConn(ws)
+          teminateConn(ws)
         }
       }
     }
   }
 }
+
+// client server
+let ClientServer = null
 
 function startClientServer() {
   if (ClientServer == null) {
@@ -933,161 +750,169 @@ function startClientServer() {
     })
 
     ClientServer.on("connection", function connection(ws) {
-      ws.on("message", function incoming(message) {
-        checkClientMessage(ws, message)
+      ws.on("message", function incoming(buffer) {
+        let message = buffer.toString()
+        checkMessage(ws, message)
       })
 
       ws.on("close", function close() {
-        let connAddress = fetchClientConnAddress(ws)
+        let connAddress = fetchConnAddress(ws)
         if (connAddress != null) {
-          console.log(`client <${connAddress}> disconnect...`)
-          delete ClientConns[connAddress]
+          ConsoleWarn(`client <${connAddress}> disconnect...`)
+          delete Conns[connAddress]
         }
       })
     })
   }
 }
 
-startClientServer()
 
-function keepOtherServerConn() {
+
+function connect(server) {
+  ConsoleInfo(`--------------------------connect to server--------------------------`)
+  ConsoleInfo(server)
+  let ws = new WebSocket(server.URL)
+  ws.on('open', function open() {
+    ConsoleInfo(`connected <===> ${server.URL}`)
+    ws.send(GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL))
+    Conns[server.Address] = ws
+
+    pullBulletin(ws)
+    pushBulletin(ws)
+    downloadBulletinFile(server.Address)
+  })
+
+  ws.on('message', function incoming(buffer) {
+    let message = buffer.toString()
+    checkMessage(ws, message)
+  })
+
+  ws.on('close', function close() {
+    ConsoleWarn(`disconnected <=X=> ${server.URL}`)
+  })
+}
+
+function keepServerConn() {
   let notConnected = []
-  for (let i in OtherServer) {
-    if (ClientConns[OtherServer[i].Address] == undefined) {
-      notConnected.push(OtherServer[i])
+  Servers.forEach(server => {
+    if (Conns[server.Address] == undefined) {
+      notConnected.push(server)
     }
-  }
+  })
 
   if (notConnected.length == 0) {
     return
   }
 
   let random = Math.floor(Math.random() * (notConnected.length))
-  let randomServerUrl = notConnected[random].URL
-  if (randomServerUrl != null) {
-    console.log(`keepOtherServerConn connecting to StaticCounter ${randomServerUrl}`)
-    try {
-      var ws = new WebSocket(randomServerUrl)
-
-      ws.on("open", function open() {
-        ws.send(GenDeclare())
-        ClientConns[notConnected[random].Address] = ws
-      })
-
-      ws.on("message", function incoming(message) {
-        checkClientMessage(ws, message)
-      })
-
-      ws.on("close", function close() {
-        let connAddress = fetchClientConnAddress(ws)
-        if (connAddress != null) {
-          console.log(`client <${connAddress}> disconnect...`)
-          delete ClientConns[connAddress]
-        }
-      })
-    } catch (e) {
-      console.log("keepOtherServerConn error...")
-    }
+  let randomServer = notConnected[random]
+  if (randomServer != null) {
+    connect(randomServer)
   }
 }
 
-let OtherServerConnJob = null
-if (OtherServerConnJob == null) {
-  OtherServerConnJob = setInterval(keepOtherServerConn, 5000);
+function go() {
+  bulletinStat()
+  startClientServer()
+
+  if (jobServerConn == null) {
+    jobServerConn = setInterval(keepServerConn, 8000)
+  }
 }
+
+go()
 
 // 刷新数据关联
-async function refreshData() {
-  //update pre_bulletin's next_hash
-  let bulletin_list = await prisma.BULLETINS.findMany({
-    orderBy: {
-      sequence: "desc"
-    }
-  })
-  for (let i = 0; i < bulletin_list.length; i++) {
-    const bulletin = bulletin_list[i]
-    if (bulletin.sequence != 1) {
-      await prisma.BULLETINS.update({
-        where: {
-          hash: bulletin.pre_hash
-        },
-        data: {
-          next_hash: bulletin.hash
-        }
-      })
-    }
-  }
+// async function refreshData() {
+//   //update pre_bulletin's next_hash
+//   let bulletin_list = await prisma.BULLETINS.findMany({
+//     orderBy: {
+//       sequence: "desc"
+//     }
+//   })
+//   for (let i = 0; i < bulletin_list.length; i++) {
+//     const bulletin = bulletin_list[i]
+//     if (bulletin.sequence != 1) {
+//       await prisma.BULLETINS.update({
+//         where: {
+//           hash: bulletin.pre_hash
+//         },
+//         data: {
+//           next_hash: bulletin.hash
+//         }
+//       })
+//     }
+//   }
 
-  //linking quote
-  bulletin_list.forEach(async bulletin => {
-    if (bulletin.quote) {
-      let quote_list = JSON.parse(bulletin.quote)
-      if (quote_list.length != 0) {
-        quote_list.forEach(async quote => {
-          let result = await prisma.QUOTES.findFirst({
-            where: {
-              main_hash: quote.Hash,
-              quote_hash: bulletin.hash
-            }
-          })
-          if (!result) {
-            result = await prisma.QUOTES.create({
-              data: {
-                main_hash: quote.Hash,
-                quote_hash: bulletin.hash,
-                address: bulletin.address,
-                sequence: bulletin.sequence,
-                content: bulletin.content,
-                signed_at: bulletin.signed_at
-              }
-            })
-            if (result) {
-              console.log(`linking`, quote)
-            }
-          }
-        })
-      }
-    }
-  })
+//   //linking quote
+//   bulletin_list.forEach(async bulletin => {
+//     if (bulletin.quote) {
+//       let quote_list = JSON.parse(bulletin.quote)
+//       if (quote_list.length != 0) {
+//         quote_list.forEach(async quote => {
+//           let result = await prisma.QUOTES.findFirst({
+//             where: {
+//               main_hash: quote.Hash,
+//               quote_hash: bulletin.hash
+//             }
+//           })
+//           if (!result) {
+//             result = await prisma.QUOTES.create({
+//               data: {
+//                 main_hash: quote.Hash,
+//                 quote_hash: bulletin.hash,
+//                 address: bulletin.address,
+//                 sequence: bulletin.sequence,
+//                 content: bulletin.content,
+//                 signed_at: bulletin.signed_at
+//               }
+//             })
+//             if (result) {
+//               console.log(`linking`, quote)
+//             }
+//           }
+//         })
+//       }
+//     }
+//   })
 
-  //linking file
-  console.log(`**************************************linking file`)
-  bulletin_list.forEach(async bulletin => {
-    if (bulletin.file) {
-      let file_list = JSON.parse(bulletin.file)
-      // console.log(file_list)
-      if (file_list.length != 0) {
-        file_list.forEach(async file => {
-          console.log(file)
-          let result = await prisma.FILES.findFirst({
-            where: {
-              hash: file.Hash
-            }
-          })
+//   //linking file
+//   console.log(`**************************************linking file`)
+//   bulletin_list.forEach(async bulletin => {
+//     if (bulletin.file) {
+//       let file_list = JSON.parse(bulletin.file)
+//       // console.log(file_list)
+//       if (file_list.length != 0) {
+//         file_list.forEach(async file => {
+//           console.log(file)
+//           let result = await prisma.FILES.findFirst({
+//             where: {
+//               hash: file.Hash
+//             }
+//           })
 
-          if (!result) {
-            console.log(`resultooooooooooooooooooooooooooooooooooooooooooooo`)
-            console.log(result)
-            let chunk_length = Math.ceil(file.Size / FileChunkSize)
-            result = await prisma.FILES.create({
-              data: {
-                hash: file.Hash,
-                name: file.Name,
-                ext: file.Ext,
-                size: file.Size,
-                chunk_length: chunk_length,
-                chunk_cursor: 0
-              }
-            })
-            console.log(`linking`, file)
-          }
-        })
-      }
-    }
-  })
+//           if (!result) {
+//             console.log(`resultooooooooooooooooooooooooooooooooooooooooooooo`)
+//             console.log(result)
+//             let chunk_length = Math.ceil(file.Size / FileChunkSize)
+//             result = await prisma.FILES.create({
+//               data: {
+//                 hash: file.Hash,
+//                 name: file.Name,
+//                 ext: file.Ext,
+//                 size: file.Size,
+//                 chunk_length: chunk_length,
+//                 chunk_cursor: 0
+//               }
+//             })
+//             console.log(`linking`, file)
+//           }
+//         })
+//       }
+//     }
+//   })
 
-}
-
+// }
 // refreshData()
 
 fs.mkdirSync(path.resolve('./BulletinFile'), { recursive: true })
