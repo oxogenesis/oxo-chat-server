@@ -169,7 +169,7 @@ function GenBulletinFileChunkJson(hash, chunk_cursor, content) {
   return json
 }
 
-function GenBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
+function GenBulletinJson(sequence, pre_hash, quote, file, content, timestamp, pk, sk) {
   let content_hash = QuarterSHA512(content)
   let tmp_json = {
     ObjectType: ObjectType.Bulletin,
@@ -181,7 +181,13 @@ function GenBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
     Timestamp: timestamp,
     PublicKey: pk
   }
-  let sig = sign(JSON.stringify(tmp_json))
+  if (quote == []) {
+    delete tmp_json["Quote"]
+  }
+  if (file == []) {
+    delete tmp_json["File"]
+  }
+  let sig = sign(JSON.stringify(tmp_json), sk)
 
   let json = {
     ObjectType: ObjectType.Bulletin,
@@ -193,6 +199,12 @@ function GenBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
     Timestamp: timestamp,
     PublicKey: pk,
     Signature: sig
+  }
+  if (quote == []) {
+    delete json["Quote"]
+  }
+  if (file == []) {
+    delete json["File"]
   }
   return json
 }
