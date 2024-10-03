@@ -1,5 +1,5 @@
 const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./Util.js')
-const { ActionCode, ObjectType, GenesisHash, PageSize, GenDeclare, GenBulletinAddressListRequest, GenBulletinAddressListResponse, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, GenChatSync, GenBulletinReplyListResponse, FileChunkSize, VerifyBulletinJson } = require('./OXO.js')
+const { ActionCode, ObjectType, GenesisHash, PageSize, GenDeclare, GenBulletinAddressListRequest, GenBulletinAddressListResponse, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, GenChatSync, GenBulletinReplyListResponse, GenBulletinFileChunkJson, FileChunkSize, VerifyBulletinJson } = require('./OXO.js')
 const { CheckMessageSchema } = require('./Schema.js')
 
 const fs = require('fs')
@@ -533,7 +533,7 @@ async function handleMessage(message, json) {
         let chunk = buffer.subarray(begin, end)
         // base64
         let content = chunk.toString('base64')
-        let object = GenBulletinFileChunkJson(json.Hash, json.Cursor, content, SelfPublicKey, SelfPrivateKey)
+        let object = GenBulletinFileChunkJson(json.Hash, json.Cursor, content)
         let msg = GenObjectResponse(object, address, SelfPublicKey, SelfPrivateKey)
         Conns[address].send(msg)
       } else if (json.To != "" && Conns[json.To]) {
@@ -792,6 +792,7 @@ function keepServerConn() {
   if (notConnected.length == 0) {
     return
   }
+  ConsoleInfo(`--------------------------keepServerConn--------------------------`)
 
   let random = Math.floor(Math.random() * (notConnected.length))
   let randomServer = notConnected[random]
@@ -805,7 +806,7 @@ function go() {
   startClientServer()
 
   if (jobServerConn == null) {
-    jobServerConn = setInterval(keepServerConn, 8000)
+    jobServerConn = setInterval(keepServerConn, 5000)
   }
 }
 

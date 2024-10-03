@@ -278,6 +278,7 @@ module.exports = {
   GenBulletinAddressListResponse,
   GenBulletinRequest,
   GenBulletinFileChunkRequest,
+  GenBulletinFileChunkJson,
   GenObjectResponse,
   GenChatSync,
   GenBulletinReplyListResponse

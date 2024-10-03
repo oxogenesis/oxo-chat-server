@@ -165,7 +165,7 @@ function downloadBulletinFile(address) {
     } else {
       if (files && files.length > 0) {
         ConsoleInfo(`--------------------------files to download--------------------------`)
-        ConsoleInfo(files)
+        console.log(files)
         for (let i = 0; i < files.length; i++) {
           const file = files[i]
           let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
@@ -240,6 +240,8 @@ function fetchUnsaveFile(address) {
         }
       })
       file_hash_list = UniqArray(file_hash_list)
+      ConsoleInfo(`--------------------------files to download--------------------------`)
+      console.log(file_hash_list)
 
       SQL = `SELECT * FROM FILES hash IN (${file_hash_list}) AND chunk_length > chunk_cursor`
       DB.all(SQL, (err, files) => {
