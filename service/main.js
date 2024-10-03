@@ -77,76 +77,59 @@ function pullBulletin(ws) {
   sendMessage(ws, msg)
 }
 
-function pushBulletin(ws) {
-  let SQL = `SELECT address, sequence FROM BULLETINS`
-  DB.all(SQL, (err, items) => {
-    if (err) {
-      ConsoleError(err)
-    } else {
-      let bulletin_sequence = {}
-      items.forEach(item => {
-        if (bulletin_sequence[item.address] == null) {
-          bulletin_sequence[item.address] = item.sequence
-        } else if (bulletin_sequence[item.address] < item.sequence) {
-          bulletin_sequence[item.address] = item.sequence
-        }
-      })
+async function pushBulletin(ws) {
+  let bulletin_list = await prisma.BULLETINS.findMany({
+    select: {
+      address: true,
+      sequence: true
+    }
+  })
+  let bulletin_sequence = {}
+  bulletin_list.forEach(bulletin => {
+    if (bulletin_sequence[bulletin.address] == null) {
+      bulletin_sequence[bulletin.address] = bulletin.sequence
+    } else if (bulletin_sequence[bulletin.address] < bulletin.sequence) {
+      bulletin_sequence[bulletin.address] = bulletin.sequence
+    }
+  })
 
 
-      for (const address in bulletin_sequence) {
-        let msg = GenBulletinRequest(address, bulletin_sequence[address] + 1, address, SelfPublicKey, SelfPrivateKey)
-        sendMessage(ws, msg)
+  for (const address in bulletin_sequence) {
+    let msg = GenBulletinRequest(address, bulletin_sequence[address] + 1, address, SelfPublicKey, SelfPrivateKey)
+    sendMessage(ws, msg)
+  }
+}
+
+async function downloadBulletinFile(address) {
+  let file_list = await prisma.FILES.findMany({
+    where: {
+      chunk_length: {
+        not: prisma.FILES.fields.chunk_cursor
       }
     }
   })
+  if (file_list && file_list.length > 0) {
+    ConsoleInfo(`--------------------------files to download--------------------------`)
+    ConsoleInfo(file_list)
+    for (let i = 0; i < file_list.length; i++) {
+      const file = file_list[i]
+      let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
+      sendMessage(Conns[address], msg)
+    }
+  }
 }
 
-function downloadBulletinFile(address) {
-  let SQL = `SELECT * FROM FILES WHERE chunk_length != chunk_cursor`
-  DB.all(SQL, (err, files) => {
-    if (err) {
-      ConsoleError(err)
-    } else {
-      if (files && files.length > 0) {
-        ConsoleInfo(`--------------------------files to download--------------------------`)
-        ConsoleInfo(files)
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i]
-          let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
-          sendMessage(Conns[address], msg)
-        }
-      }
-    }
-  })
-}
+async function bulletinStat() {
+  let bulletin_list = await prisma.BULLETINS.findMany()
+  ConsoleInfo(`BulletinCount: ${bulletin_list.length}`)
 
-function bulletinStat() {
-  let SQL = `SELECT * FROM BULLETINS`
-  DB.all(SQL, (err, items) => {
-    if (err) {
-      ConsoleError(err)
-    } else {
-      ConsoleInfo(`BulletinCount: ${items.length}`)
-    }
-  })
+  let file_list = await prisma.FILES.findMany()
+  ConsoleInfo(`****FileCount: ${file_list.length}`)
 
-  SQL = `SELECT * FROM FILES`
-  DB.all(SQL, (err, items) => {
-    if (err) {
-      ConsoleError(err)
-    } else {
-      ConsoleInfo(`****FileCount: ${items.length}`)
-    }
+  let address_list = await prisma.BULLETINS.groupBy({
+    by: "address"
   })
-
-  SQL = `SELECT * FROM BULLETINS GROUP BY address`
-  DB.all(SQL, (err, items) => {
-    if (err) {
-      ConsoleError(err)
-    } else {
-      ConsoleInfo(`*AddressCount: ${items.length}`)
-    }
-  })
+  ConsoleInfo(`*AddressCount: ${address_list.length}`)
 }
 
 async function CacheBulletin(bulletin) {
@@ -187,50 +170,55 @@ async function CacheBulletin(bulletin) {
       })
 
       //create quote
-      bulletin.Quote.forEach(async quote => {
-        result = await prisma.QUOTES.create({
-          data: {
-            main_hash: quote.Hash,
-            quote_hash: hash,
-            address: address,
-            sequence: bulletin.Sequence,
-            content: bulletin.Content,
-            signed_at: bulletin.Timestamp
-          }
-        })
-      })
-
-      //create file
-      bulletin.File.forEach(async file => {
-        let f = await prisma.FILES.findFirst({
-          where: {
-            hash: file.Hash
-          }
-        })
-        if (!f) {
-          let chunk_length = Math.ceil(file.Size / FileChunkSize)
-          f = await prisma.FILES.create({
+      if (bulletin.Quote) {
+        bulletin.Quote.forEach(async quote => {
+          result = await prisma.QUOTES.create({
             data: {
-              hash: file.Hash,
-              name: file.Name,
-              ext: file.Ext,
-              size: file.Size,
-              chunk_length: chunk_length,
-              chunk_cursor: 0
+              main_hash: quote.Hash,
+              quote_hash: hash,
+              address: address,
+              sequence: bulletin.Sequence,
+              content: bulletin.Content,
+              signed_at: bulletin.Timestamp
             }
           })
-        }
-        if (f.chunk_cursor < f.chunk_length) {
-          let msg = GenBulletinFileChunkRequest(f.hash, f.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
-          Conns[address].send(msg)
-        }
-      })
+        })
+      }
 
-      //Brocdcast to OtherServer
-      for (let i in OtherServer) {
-        let ws = Conns[OtherServer[i].Address]
+
+      //create file
+      if (bulletin.File) {
+        bulletin.File.forEach(async file => {
+          let f = await prisma.FILES.findFirst({
+            where: {
+              hash: file.Hash
+            }
+          })
+          if (!f) {
+            let chunk_length = Math.ceil(file.Size / FileChunkSize)
+            f = await prisma.FILES.create({
+              data: {
+                hash: file.Hash,
+                name: file.Name,
+                ext: file.Ext,
+                size: file.Size,
+                chunk_length: chunk_length,
+                chunk_cursor: 0
+              }
+            })
+          }
+          if (f.chunk_cursor < f.chunk_length) {
+            let msg = GenBulletinFileChunkRequest(f.hash, f.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
+            Conns[address].send(msg)
+          }
+        })
+      }
+
+      //Brocdcast to Servers
+      for (let i in Servers) {
+        let ws = Conns[Servers[i].Address]
         if (ws != undefined && ws.readyState == WebSocket.OPEN) {
-          ws.send(GenObjectResponse(bulletin, OtherServer[i].Address, SelfPublicKey, SelfPrivateKey))
+          ws.send(GenObjectResponse(bulletin, Servers[i].Address, SelfPublicKey, SelfPrivateKey))
         }
       }
     }
@@ -624,7 +612,7 @@ async function checkMessage(ws, message) {
   ConsoleInfo(`${message.slice(0, 512)}`)
   let json = CheckMessageSchema(message)
   if (json == false) {
-    //json格式不合法
+    // json格式不合法
     // sendServerMessage(ws, MessageCode.JsonSchemaInvalid)
     ConsoleWarn(`json格式不合法`)
     teminateConn(ws)
@@ -766,7 +754,8 @@ function startClientServer() {
   }
 }
 
-
+// server conn
+let jobServerConn = null
 
 function connect(server) {
   ConsoleInfo(`--------------------------connect to server--------------------------`)
