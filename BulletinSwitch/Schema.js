@@ -108,7 +108,7 @@ let BulletinSchema = {
   }
 }
 
-const BulletinRandomSchema = {
+const BulletinRandomRequestSchema = {
   "type": "object",
   "required": ["Action", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 4,
@@ -512,7 +512,7 @@ const vDeclare = ajv.compile(DeclareSchema)
 const vObjectResponseSchema = ajv.compile(ObjectResponseSchema)
 
 const vBulletinSchema = ajv.compile(BulletinSchema)
-const vBulletinRandomSchema = ajv.compile(BulletinRandomSchema)
+const vBulletinRandomRequestSchema = ajv.compile(BulletinRandomRequestSchema)
 const vBulletinRequestSchema = ajv.compile(BulletinRequestSchema)
 const vFileChunkRequestSchema = ajv.compile(FileChunkRequestSchema)
 const vBulletinAddressListRequestSchema = ajv.compile(BulletinAddressListRequestSchema)
@@ -532,7 +532,7 @@ function CheckMessageSchema(strJson) {
   if (typeof strJson == "string") {
     try {
       const json = JSON.parse(strJson)
-      if (vObjectResponseSchema(json) || vBulletinSchema(json) || vBulletinRandomSchema(json) || vBulletinRequestSchema(json) || vFileChunkRequestSchema(json) || vBulletinAddressListRequestSchema(json) || vBulletinAddressListResponseSchema(json) || vBulletinReplyListRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupRequestSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json)) {
+      if (vObjectResponseSchema(json) || vBulletinSchema(json) || vBulletinRandomRequestSchema(json) || vBulletinRequestSchema(json) || vFileChunkRequestSchema(json) || vBulletinAddressListRequestSchema(json) || vBulletinAddressListResponseSchema(json) || vBulletinReplyListRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupRequestSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json)) {
         return json
       } else {
         return false

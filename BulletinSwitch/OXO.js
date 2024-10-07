@@ -15,7 +15,7 @@ const ActionCode = {
   Declare: 100,
   ObjectResponse: 101,
 
-  BulletinRandom: 200,
+  BulletinRandomRequest: 200,
   BulletinRequest: 201,
   BulletinFileChunkRequest: 202,
   BulletinAddressListRequest: 203,
@@ -107,6 +107,12 @@ function VerifyBulletinJson(bulletin) {
     Timestamp: bulletin.Timestamp,
     PublicKey: bulletin.PublicKey,
     Signature: bulletin.Signature
+  }
+  if (!bulletin.Quote) {
+    delete tmp_json.Quote
+  }
+  if (!bulletin.File) {
+    delete tmp_json.File
   }
   return VerifyJsonSignature(tmp_json)
 }

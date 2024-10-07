@@ -542,7 +542,7 @@ async function handleMessage(message, json) {
         Conns[json.To].send(msg)
       }
     }
-  } else if (json.Action == ActionCode.BulletinRandom) {
+  } else if (json.Action == ActionCode.BulletinRandomRequest) {
     //send random bulletin
     let bulletin = await prisma.$queryRaw`SELECT * FROM "public"."BULLETINS" ORDER BY RANDOM() LIMIT 1`
     if (bulletin != null) {

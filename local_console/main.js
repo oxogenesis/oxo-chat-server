@@ -123,7 +123,7 @@ const ActionCode = {
   Declare: 100,
   ObjectResponse: 101,
 
-  BulletinRandom: 200,
+  BulletinRandomRequest: 200,
   BulletinRequest: 201,
   BulletinFileChunkRequest: 202,
   BulletinAddressListRequest: 203,
