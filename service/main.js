@@ -628,9 +628,13 @@ async function checkMessage(ws, message) {
     } else {
       let connAddress = fetchConnAddress(ws)
       if (connAddress != null && connAddress != address) {
-        //using different address in same connection
+        // using different address in same connection
         // sendServerMessage(ws, MessageCode.AddressChanged)
-        teminateConn(ws)
+        if (json.ObjectType && json.ObjectType == ObjectType.Bulletin && VerifyBulletinJson(json)) {
+          CacheBulletin(json)
+        } else {
+          teminateConn(ws)
+        }
       } else {
         if (!VerifyJsonSignature(json)) {
           //"声明消息"签名不合法
