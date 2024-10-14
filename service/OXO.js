@@ -187,10 +187,10 @@ function GenBulletinJson(sequence, pre_hash, quote, file, content, timestamp, pk
     Timestamp: timestamp,
     PublicKey: pk
   }
-  if (quote == []) {
+  if (quote && quote.length == 0) {
     delete tmp_json["Quote"]
   }
-  if (file == []) {
+  if (file && file.length == 0) {
     delete tmp_json["File"]
   }
   let sig = sign(JSON.stringify(tmp_json), sk)
@@ -206,10 +206,10 @@ function GenBulletinJson(sequence, pre_hash, quote, file, content, timestamp, pk
     PublicKey: pk,
     Signature: sig
   }
-  if (quote == []) {
+  if (quote && quote.length == 0) {
     delete json["Quote"]
   }
-  if (file == []) {
+  if (file && file.length == 0) {
     delete json["File"]
   }
   return json

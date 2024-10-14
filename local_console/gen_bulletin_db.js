@@ -108,6 +108,12 @@ function genBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
     Timestamp: timestamp,
     PublicKey: PublicKey
   }
+  if (quote && quote.length == 0) {
+    delete tmp_json["Quote"]
+  }
+  if (file && file.length == 0) {
+    delete tmp_json["File"]
+  }
   let sig = sign(JSON.stringify(tmp_json), PrivateKey)
 
   let json = {
@@ -120,6 +126,12 @@ function genBulletinJson(sequence, pre_hash, quote, file, content, timestamp) {
     Timestamp: timestamp,
     PublicKey: PublicKey,
     Signature: sig
+  }
+  if (quote && quote.length == 0) {
+    delete json["Quote"]
+  }
+  if (file && file.length == 0) {
+    delete json["File"]
   }
   return json
 }
