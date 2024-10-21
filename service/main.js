@@ -275,6 +275,7 @@ async function CacheECDH(json) {
       })
     }
   } else {
+    // TODO update logic not enough
     if (json1 != "") {
       await prisma.ECDHS.update({
         where: {
@@ -381,7 +382,7 @@ async function CacheMessage(json) {
     if (msg_list_length != 0) {
       current_sequence = msg_list_length
     }
-    let msg = GenChatSync(dest_address, current_sequence)
+    let msg = GenChatSync(dest_address, current_sequence, SelfPublicKey, SelfPrivateKey)
     Conns[sour_address].send(`${msg}`)
   }
 }
