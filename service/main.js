@@ -1,5 +1,5 @@
 const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./Util.js')
-const { ActionCode, ObjectType, GenesisHash, PageSize, GenDeclare, GenBulletinAddressListRequest, GenBulletinAddressListResponse, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, GenChatSync, GenBulletinReplyListResponse, GenBulletinFileChunkJson, FileChunkSize, VerifyBulletinJson } = require('./OXO.js')
+const { ActionCode, ObjectType, GenesisHash, PageSize, GenDeclare, GenBulletinAddressListRequest, GenBulletinAddressListResponse, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, GenChatMessageSync, GenBulletinReplyListResponse, GenBulletinFileChunkJson, FileChunkSize, VerifyBulletinJson } = require('./OXO.js')
 const { CheckMessageSchema } = require('./Schema.js')
 
 const fs = require('fs')
@@ -382,12 +382,12 @@ async function CacheMessage(json) {
     if (msg_list_length != 0) {
       current_sequence = msg_list_length
     }
-    let msg = GenChatSync(dest_address, current_sequence, SelfPublicKey, SelfPrivateKey)
+    let msg = GenChatMessageSync(dest_address, current_sequence, SelfPublicKey, SelfPrivateKey)
     Conns[sour_address].send(`${msg}`)
   }
 }
 
-async function HandelChatSync(json) {
+async function HandelChatMessageSync(json) {
   let dest_address = oxoKeyPairs.deriveAddress(json.PublicKey)
   let msg_list = await prisma.MESSAGES.findMany({
     where: {
@@ -421,8 +421,8 @@ async function handleMessage(message, json) {
 
     if (json.Action == ActionCode.ChatMessage) {
       CacheMessage(json)
-    } else if (json.Action == ActionCode.ChatSync) {
-      HandelChatSync(json)
+    } else if (json.Action == ActionCode.ChatMessageSync) {
+      HandelChatMessageSync(json)
     } else if (json.Action == ActionCode.ChatDH) {
       CacheECDH(json)
       HandelECDHSync(json)

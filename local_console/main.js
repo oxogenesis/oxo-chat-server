@@ -123,25 +123,36 @@ const ActionCode = {
   Declare: 100,
   ObjectResponse: 101,
 
-  BulletinRandomRequest: 200,
-  BulletinRequest: 201,
+  BulletinRequest: 200,
+  BulletinRandomRequest: 201,
   BulletinFileChunkRequest: 202,
   BulletinAddressListRequest: 203,
   BulletinAddressListResponse: 204,
   BulletinReplyListRequest: 205,
   BulletinReplyListResponse: 206,
 
-  ChatDH: 301,
-  ChatMessage: 302,
-  ChatSync: 303,
-  PrivateFileRequest: 304,
-  ChatSyncFromServer: 305,
+  ChatMessageSync: 302,
+  PrivateFileRequest: 303,
+  ChatMessageSyncFromServer: 304,
 
-  GroupRequest: 401,
-  GroupManageSync: 402,
-  GroupDH: 403,
-  GroupMessageSync: 404,
-  GroupFileRequest: 405
+  // GroupRequest: 401,
+  // GroupManageSync: 402,
+  // GroupDH: 403,
+  // GroupMessageSync: 404,
+  // GroupFileRequest: 405
+}
+
+const ObjectType = {
+  Bulletin: 101,
+  BulletinFileChunk: 102,
+
+  ChatDH: 201,
+  ChatMessage: 202,
+  ChatFileChunk: 203,
+
+  // GroupManage: 301,
+  // GroupMessage: 302,
+  // GroupFileChunk: 303
 }
 
 // message
@@ -156,17 +167,6 @@ const MessageCode = {
   ToNotExist: 7, // To not exist...
 
   GatewayDeclareSuccess: 1000 // gateway declare success...
-}
-
-const ObjectType = {
-  Bulletin: 101,
-  BulletinFileChunk: 102,
-
-  PrivateFile: 201,
-
-  GroupManage: 301,
-  GroupMessage: 302,
-  GroupFile: 303
 }
 
 const sqlite3 = require('sqlite3')

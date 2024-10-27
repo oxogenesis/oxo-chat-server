@@ -1,12 +1,17 @@
-//client schema
-//>>>declare<<<
+const Ajv = require('ajv')
+const { ActionCode, ObjectType } = require('./OXO')
+const ajv = new Ajv({ allErrors: true })
+
+// client schema
+// >>>declare<<<
 const DeclareSchema = {
   "type": "object",
   "required": ["Action", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 5,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.Declare
     },
     "URL": {
       "type": "string"
@@ -29,7 +34,8 @@ const ObjectResponseSchema = {
   "maxProperties": 6,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.ObjectResponse
     },
     "Object": {
       "type": "object"
@@ -49,14 +55,15 @@ const ObjectResponseSchema = {
   }
 }
 
-//>>>bulletin<<<
+// >>>bulletin<<<
 let BulletinSchema = {
   "type": "object",
   "required": ["ObjectType", "Sequence", "PreHash", "Content", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 9,
   "properties": {
     "ObjectType": {
-      "type": "number"
+      "type": "number",
+      "const": ObjectType.Bulletin
     },
     "Sequence": {
       "type": "number"
@@ -114,7 +121,8 @@ const BulletinRandomRequestSchema = {
   "maxProperties": 4,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.BulletinRandomRequest
     },
     "Timestamp": {
       "type": "number"
@@ -134,7 +142,8 @@ const BulletinRequestSchema = {
   "maxProperties": 7,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.BulletinRequest
     },
     "Address": {
       "type": "string"
@@ -157,13 +166,14 @@ const BulletinRequestSchema = {
   }
 }
 
-const FileChunkRequestSchema = {
+const BulletinFileChunkRequestSchema = {
   "type": "object",
   "required": ["Action", "Hash", "Cursor", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 7,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.BulletinFileChunkRequest
     },
     "Hash": {
       "type": "string"
@@ -193,7 +203,8 @@ const BulletinAddressListRequestSchema = {
   "maxProperties": 5,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.BulletinAddressListRequest
     },
     "Page": {
       "type": "number"
@@ -216,7 +227,8 @@ const BulletinAddressListResponseSchema = {
   "maxProperties": 6,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.BulletinAddressListResponse
     },
     "Page": {
       "type": "number"
@@ -254,7 +266,8 @@ const BulletinReplyListRequestSchema = {
   "maxProperties": 6,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.BulletinReplyListRequest
     },
     "Hash": {
       "type": "string"
@@ -274,14 +287,15 @@ const BulletinReplyListRequestSchema = {
   }
 }
 
-//>>>chat<<<
+// >>>chat<<<
 const ChatMessageSchema = {
   "type": "object",
-  "required": ["Action", "Sequence", "PreHash", "PairHash", "Content", "To", "Timestamp", "PublicKey", "Signature"],
+  "required": ["ObjectType", "Sequence", "PreHash", "Content", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 9,
   "properties": {
-    "Action": {
-      "type": "number"
+    "ObjectType": {
+      "type": "number",
+      "const": ObjectType.ChatMessage
     },
     "Sequence": {
       "type": "number"
@@ -289,7 +303,7 @@ const ChatMessageSchema = {
     "PreHash": {
       "type": "string"
     },
-    "PairHash": {
+    "ACK": {
       "type": "array",
       "minItems": 0,
       "maxItems": 8,
@@ -315,13 +329,14 @@ const ChatMessageSchema = {
   }
 }
 
-const ChatSyncSchema = {
+const ChatMessageSyncSchema = {
   "type": "object",
   "required": ["Action", "CurrentSequence", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 6,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.ChatMessageSync
     },
     "CurrentSequence": {
       "type": "number"
@@ -341,14 +356,15 @@ const ChatSyncSchema = {
   }
 }
 
-//ChatDH
+// ChatDH
 const ChatDHSchema = {
   "type": "object",
   "required": ["Action", "Partition", "Sequence", "DHPublicKey", "Pair", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 9,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.ChatDH
     },
     "Partition": {
       "type": "number"
@@ -377,15 +393,16 @@ const ChatDHSchema = {
   }
 }
 
-//>>>group<<<
-//group request
+// >>>group<<<
+// group request
 const GroupRequestSchema = {
   "type": "object",
   "required": ["Action", "GroupHash", "GroupManageAction", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 7,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.GroupRequest
     },
     "GroupHash": {
       "type": "string"
@@ -416,7 +433,8 @@ const GroupManageSyncSchema = {
   "maxProperties": 7,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.GroupManageSync
     },
     "GroupHash": {
       "type": "string"
@@ -445,7 +463,8 @@ const GroupDHSchema = {
   "maxProperties": 8,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.GroupDH
     },
     "GroupHash": {
       "type": "string"
@@ -477,7 +496,8 @@ const GroupMessageSyncSchema = {
   "maxProperties": 8,
   "properties": {
     "Action": {
-      "type": "number"
+      "type": "number",
+      "const": ActionCode.GroupMessageSync
     },
     "GroupHash": {
       "type": "string"
@@ -502,10 +522,47 @@ const GroupMessageSyncSchema = {
     }
   }
 }
+
+let GroupMessageSchema = {
+  "type": "object",
+  "required": ["GroupHash", "Sequence", "PreHash", "Content", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 8,
+  "properties": {
+    "GroupHash": {
+      "type": "string"
+    },
+    "Sequence": {
+      "type": "number"
+    },
+    "PreHash": {
+      "type": "string"
+    },
+    "Confirm": {
+      "type": "object",
+      "required": ["Address", "Sequence", "Hash"],
+      "properties": {
+        "Address": { "type": "string" },
+        "Sequence": { "type": "number" },
+        "Hash": { "type": "string" }
+      }
+    },
+    "Content": {
+      "type": "string"
+    },
+    "Timestamp": {
+      "type": "number"
+    },
+    "PublicKey": {
+      "type": "string"
+    },
+    "Signature": {
+      "type": "string"
+    }
+  }
+}
 //end client schema
 
-const Ajv = require('ajv')
-const ajv = new Ajv({ allErrors: true })
+
 
 //client
 const vDeclare = ajv.compile(DeclareSchema)
@@ -514,13 +571,13 @@ const vObjectResponseSchema = ajv.compile(ObjectResponseSchema)
 const vBulletinSchema = ajv.compile(BulletinSchema)
 const vBulletinRandomRequestSchema = ajv.compile(BulletinRandomRequestSchema)
 const vBulletinRequestSchema = ajv.compile(BulletinRequestSchema)
-const vFileChunkRequestSchema = ajv.compile(FileChunkRequestSchema)
+const vBulletinFileChunkRequestSchema = ajv.compile(BulletinFileChunkRequestSchema)
 const vBulletinAddressListRequestSchema = ajv.compile(BulletinAddressListRequestSchema)
 const vBulletinAddressListResponseSchema = ajv.compile(BulletinAddressListResponseSchema)
 const vBulletinReplyListRequestSchema = ajv.compile(BulletinReplyListRequestSchema)
 
 const vChatMessageSchema = ajv.compile(ChatMessageSchema)
-const vChatSyncSchema = ajv.compile(ChatSyncSchema)
+const vChatMessageSyncSchema = ajv.compile(ChatMessageSyncSchema)
 const vChatDHSchema = ajv.compile(ChatDHSchema)
 
 const vGroupManageSyncSchema = ajv.compile(GroupManageSyncSchema)
@@ -532,7 +589,7 @@ function CheckMessageSchema(strJson) {
   if (typeof strJson == "string") {
     try {
       const json = JSON.parse(strJson)
-      if (vObjectResponseSchema(json) || vBulletinSchema(json) || vBulletinRandomRequestSchema(json) || vBulletinRequestSchema(json) || vFileChunkRequestSchema(json) || vBulletinAddressListRequestSchema(json) || vBulletinAddressListResponseSchema(json) || vBulletinReplyListRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupRequestSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json)) {
+      if (vObjectResponseSchema(json) || vBulletinSchema(json) || vBulletinRandomRequestSchema(json) || vBulletinRequestSchema(json) || vBulletinFileChunkRequestSchema(json) || vBulletinAddressListRequestSchema(json) || vBulletinAddressListResponseSchema(json) || vBulletinReplyListRequestSchema(json) || vChatMessageSchema(json) || vChatMessageSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupRequestSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json)) {
         return json
       } else {
         return false
