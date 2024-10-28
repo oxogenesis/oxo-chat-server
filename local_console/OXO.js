@@ -23,9 +23,9 @@ const ActionCode = {
   BulletinReplyListRequest: 205,
   BulletinReplyListResponse: 206,
 
-  ChatMessageSync: 302,
-  PrivateFileRequest: 303,
-  ChatMessageSyncFromServer: 304,
+  ChatMessageSync: 301,
+  ChatMessageSyncFromServer: 302,
+  ChatFileRequest: 303,
 
   // GroupRequest: 401,
   // GroupManageSync: 402,
@@ -113,6 +113,20 @@ function VerifyBulletinJson(bulletin) {
   }
   if (!bulletin.File) {
     delete tmp_json.File
+  }
+  return VerifyJsonSignature(tmp_json)
+}
+
+function VerifyObjectResponseJson(object_response) {
+  let object_string = JSON.stringify(object_response.object)
+  let object_hash = QuarterSHA512(object_string)
+  let tmp_json = {
+    Action: ActionCode.ObjectResponse,
+    ObjectHash: object_hash,
+    To: object_response.to,
+    Timestamp: object_response.Timestamp,
+    PublicKey: object_response.PublicKey,
+    Signature: object_response.Signature
   }
   return VerifyJsonSignature(tmp_json)
 }
@@ -279,6 +293,7 @@ module.exports = {
 
   VerifyJsonSignature,
   VerifyBulletinJson,
+  VerifyObjectResponseJson,
   GenDeclare,
   GenBulletinAddressListRequest,
   GenBulletinAddressListResponse,

@@ -1,5 +1,5 @@
 const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./Util.js')
-const { ActionCode, ObjectType, GenesisHash, PageSize, GenDeclare, GenBulletinAddressListRequest, GenBulletinAddressListResponse, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, GenChatMessageSync, GenBulletinReplyListResponse, GenBulletinFileChunkJson, FileChunkSize, VerifyBulletinJson } = require('./OXO.js')
+const { ActionCode, ObjectType, GenesisHash, PageSize, GenDeclare, GenBulletinAddressListRequest, GenBulletinAddressListResponse, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, GenChatMessageSync, GenBulletinReplyListResponse, GenBulletinFileChunkJson, FileChunkSize, VerifyBulletinJson, VerifyObjectResponseJson } = require('./OXO.js')
 const { CheckMessageSchema } = require('./Schema.js')
 
 const fs = require('fs')
@@ -56,8 +56,6 @@ function fetchConnAddress(ws) {
   }
   return null
 }
-
-
 
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 //client listener
@@ -209,17 +207,15 @@ async function CacheBulletin(bulletin) {
           }
           if (f.chunk_cursor < f.chunk_length) {
             let msg = GenBulletinFileChunkRequest(f.hash, f.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
-            Conns[address].send(msg)
+            SendMessage(address, msg)
           }
         })
       }
 
       //Brocdcast to Servers
       for (let i in Servers) {
-        let ws = Conns[Servers[i].Address]
-        if (ws != undefined && ws.readyState == WebSocket.OPEN) {
-          ws.send(GenObjectResponse(bulletin, Servers[i].Address, SelfPublicKey, SelfPrivateKey))
-        }
+        let msg = GenObjectResponse(bulletin, Servers[i].Address, SelfPublicKey, SelfPrivateKey)
+        SendMessage(Servers[i].Address, msg)
       }
     }
   }
@@ -337,9 +333,9 @@ async function HandelECDHSync(json) {
     // dh存在 对方握手消息已记录
     // 我未完成握手
     if (address1 == sour_address && dh.json2 != "") {
-      Conns[sour_address].send(`${dh.json2}`)
+      SendMessage(sour_address, dh.json2)
     } else if (address2 == sour_address && dh.json1 != "") {
-      Conns[sour_address].send(`${dh.json1}`)
+      SendMessage(sour_address, dh.json1)
     }
   }
 }
@@ -383,7 +379,7 @@ async function CacheMessage(json) {
       current_sequence = msg_list_length
     }
     let msg = GenChatMessageSync(dest_address, current_sequence, SelfPublicKey, SelfPrivateKey)
-    Conns[sour_address].send(`${msg}`)
+    SendMessage(sour_address, msg)
   }
 }
 
@@ -407,89 +403,41 @@ async function HandelChatMessageSync(json) {
   let msg_list_length = msg_list.length
   for (let i = 0; i < msg_list_length; i++) {
     await DelayExec(1000)
-    Conns[dest_address].send(`${msg_list[i].json}`)
+    SendMessage(dest_address, msg_list[i].json)
+  }
+}
+
+function SendMessage(address, message) {
+  if (Conns[address] != null && Conns[address].readyState == WebSocket.OPEN) {
+    // 對方在綫
+    Conns[address].send(`${message}`)
+  }
+}
+
+async function handleObject(message, json) {
+  if (json.To != null) {
+    // forward message
+    SendMessage(json.To, message)
+  }
+
+  if (json.ObjectType == ObjectType.Bulletin && VerifyBulletinJson(json)) {
+    CacheBulletin(json)
+    //fetch more bulletin
+    let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+    let msg = GenBulletinRequest(address, json.Sequence + 1, address, SelfPublicKey, SelfPrivateKey)
+    SendMessage(address, msg)
+  } else if (json.ObjectType == ObjectType.ChatMessage && VerifyJsonSignature(json)) {
+    CacheMessage(json)
+  } else if (json.ObjectType == ObjectType.ChatDH && VerifyJsonSignature(json)) {
+    CacheECDH(json)
+    HandelECDHSync(json)
   }
 }
 
 async function handleMessage(message, json) {
   if (json.To != null) {
-    if (Conns[json.To] != null && Conns[json.To].readyState == WebSocket.OPEN) {
-      // 對方在綫
-      //forward message
-      Conns[json.To].send(`${message}`)
-    }
-
-    if (json.Action == ActionCode.ChatMessage) {
-      CacheMessage(json)
-    } else if (json.Action == ActionCode.ChatMessageSync) {
-      HandelChatMessageSync(json)
-    } else if (json.Action == ActionCode.ChatDH) {
-      CacheECDH(json)
-      HandelECDHSync(json)
-    }
-
-    if (json.Action == ActionCode.ObjectResponse) {
-      if (json.Object.ObjectType == ObjectType.Bulletin) {
-        //cache bulletin
-        CacheBulletin(json.Object)
-        if (json.To == SelfAddress) {
-          //fetch more bulletin
-          let address = oxoKeyPairs.deriveAddress(json.Object.PublicKey)
-          if (Conns[address] != null && Conns[address].readyState == WebSocket.OPEN) {
-            let msg = GenBulletinRequest(address, json.Object.Sequence + 1, address, SelfPublicKey, SelfPrivateKey)
-            Conns[address].send(msg)
-          }
-        }
-      } else if (json.Object.ObjectType == ObjectType.BulletinFileChunk) {
-        //cache bulletin file
-        ConsoleInfo(`BulletinFileChunk........................................`)
-        let bulletin_file = await prisma.FILES.findFirst({
-          where: {
-            hash: json.Object.Hash
-          },
-          select: {
-            size: true,
-            chunk_length: true,
-            chunk_cursor: true
-          }
-        })
-        let file_dir = `./BulletinFile/${json.Object.Hash.substring(0, 3)}/${json.Object.Hash.substring(3, 6)}`
-        let file_path = `${file_dir}/${json.Object.Hash}`
-        fs.mkdirSync(path.resolve(file_dir), { recursive: true })
-        if (bulletin_file.chunk_cursor < bulletin_file.chunk_length) {
-          const utf8_buffer = Buffer.from(json.Object.Content, 'base64')
-          fs.appendFileSync(path.resolve(file_path), utf8_buffer)
-          let current_chunk_cursor = bulletin_file.chunk_cursor + 1
-          await prisma.FILES.update({
-            where: {
-              hash: json.Object.Hash
-            },
-            data: {
-              chunk_cursor: current_chunk_cursor
-            }
-          })
-          if (current_chunk_cursor < bulletin_file.chunk_length) {
-            let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-            let msg = GenBulletinFileChunkRequest(json.Object.Hash, current_chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
-            Conns[address].send(msg)
-          } else {
-            // compare hash
-            let hash = FileHashSync(path.resolve(file_path))
-            if (hash != json.Object.Hash) {
-              fs.rmSync(path.resolve(file_path))
-              await prisma.FILES.update({
-                where: {
-                  hash: json.Object.Hash
-                },
-                data: {
-                  chunk_cursor: 0
-                }
-              })
-            }
-          }
-        }
-      }
-    }
+    // forward message
+    SendMessage(json.To, message)
   }
 
   if (json.Action == ActionCode.BulletinRequest) {
@@ -505,7 +453,7 @@ async function handleMessage(message, json) {
     })
     if (bulletin != null) {
       let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-      Conns[address].send(bulletin.json)
+      SendMessage(address, bulletin.json)
     }
   } else if (json.Action == ActionCode.BulletinFileChunkRequest) {
     let file = await prisma.FILES.findFirst({
@@ -536,11 +484,11 @@ async function handleMessage(message, json) {
         let content = chunk.toString('base64')
         let object = GenBulletinFileChunkJson(json.Hash, json.Cursor, content)
         let msg = GenObjectResponse(object, address, SelfPublicKey, SelfPrivateKey)
-        Conns[address].send(msg)
+        SendMessage(address, msg)
       } else if (json.To != "" && Conns[json.To]) {
         // fetch file
         let msg = GenBulletinFileChunkRequest(json.Hash, file.chunk_cursor + 1, json.To, SelfPublicKey, SelfPrivateKey)
-        Conns[json.To].send(msg)
+        SendMessage(json.To, msg)
       }
     }
   } else if (json.Action == ActionCode.BulletinRandomRequest) {
@@ -548,7 +496,7 @@ async function handleMessage(message, json) {
     let bulletin = await prisma.$queryRaw`SELECT * FROM "public"."BULLETINS" ORDER BY RANDOM() LIMIT 1`
     if (bulletin != null) {
       let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-      Conns[address].send(bulletin[0].json)
+      SendMessage(address, bulletin[0].json)
     }
   } else if (json.Action == ActionCode.BulletinAddressListRequest && json.Page > 0) {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
@@ -573,7 +521,7 @@ async function handleMessage(message, json) {
       address_list.push(new_item)
     })
     let msg = GenBulletinAddressListResponse(json.Page, address_list, SelfPublicKey, SelfPrivateKey)
-    Conns[address].send(msg)
+    SendMessage(address, msg)
   } else if (json.Action == ActionCode.BulletinReplyListRequest && json.Page > 0) {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     let result = await prisma.QUOTES.findMany({
@@ -604,8 +552,127 @@ async function handleMessage(message, json) {
       reply_list.push(new_item)
     })
     let msg = GenBulletinReplyListResponse(json.Hash, json.Page, reply_list)
-    Conns[address].send(msg)
+    SendMessage(address, msg)
+  } else if (json.Action == ActionCode.ChatMessageSync) {
+    HandelChatMessageSync(json)
+  } else if (json.Action == ActionCode.ObjectResponse && VerifyObjectResponseJson(json)) {
+    if (json.Object.ObjectType == ObjectType.Bulletin && VerifyBulletinJson(json.Object)) {
+      CacheBulletin(json.Object)
+      if (json.To == SelfAddress) {
+        //fetch more bulletin
+        let address = oxoKeyPairs.deriveAddress(json.Object.PublicKey)
+        let msg = GenBulletinRequest(address, json.Object.Sequence + 1, address, SelfPublicKey, SelfPrivateKey)
+        SendMessage(address, msg)
+      }
+    } else if (json.Object.ObjectType == ObjectType.BulletinFileChunk) {
+      //cache bulletin file
+      ConsoleInfo(`BulletinFileChunk........................................`)
+      let bulletin_file = await prisma.FILES.findFirst({
+        where: {
+          hash: json.Object.Hash
+        },
+        select: {
+          size: true,
+          chunk_length: true,
+          chunk_cursor: true
+        }
+      })
+      let file_dir = `./BulletinFile/${json.Object.Hash.substring(0, 3)}/${json.Object.Hash.substring(3, 6)}`
+      let file_path = `${file_dir}/${json.Object.Hash}`
+      fs.mkdirSync(path.resolve(file_dir), { recursive: true })
+      if (bulletin_file.chunk_cursor < bulletin_file.chunk_length) {
+        const utf8_buffer = Buffer.from(json.Object.Content, 'base64')
+        fs.appendFileSync(path.resolve(file_path), utf8_buffer)
+        let current_chunk_cursor = bulletin_file.chunk_cursor + 1
+        await prisma.FILES.update({
+          where: {
+            hash: json.Object.Hash
+          },
+          data: {
+            chunk_cursor: current_chunk_cursor
+          }
+        })
+        if (current_chunk_cursor < bulletin_file.chunk_length) {
+          let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+          let msg = GenBulletinFileChunkRequest(json.Object.Hash, current_chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
+          SendMessage(address, msg)
+        } else {
+          // compare hash
+          let hash = FileHashSync(path.resolve(file_path))
+          if (hash != json.Object.Hash) {
+            fs.rmSync(path.resolve(file_path))
+            await prisma.FILES.update({
+              where: {
+                hash: json.Object.Hash
+              },
+              data: {
+                chunk_cursor: 0
+              }
+            })
+          }
+        }
+      }
+    } else if (json.Object.ObjectType == ObjectType.ChatFileChunk) {
+
+    }
   }
+}
+
+async function SyncClient(address) {
+  // 获取最新bulletin
+  let bulletin = await prisma.BULLETINS.findFirst({
+    where: {
+      address: address
+    },
+    orderBy: {
+      sequence: "desc"
+    },
+    select: {
+      sequence: true
+    }
+  })
+  let sequence = 1
+  if (bulletin != null) {
+    sequence = bulletin.sequence + 1
+  }
+  let msg = GenBulletinRequest(address, sequence, address, SelfPublicKey, SelfPrivateKey)
+  SendMessage(address, msg)
+
+  // 获取未缓存的bulletin文件
+  let bulletin_list = await prisma.BULLETINS.findMany({
+    orderBy: {
+      sequence: "desc"
+    }
+  })
+  let file_hash_list = []
+  bulletin_list.forEach(async bulletin => {
+    let file_list = JSON.parse(bulletin.file)
+    if (file_list && file_list.length != 0) {
+      file_list.forEach(async file => {
+        file_hash_list.push(file.Hash)
+      })
+    }
+  })
+  file_hash_list = UniqArray(file_hash_list)
+  let file_list = await prisma.FILES.findMany({
+    where: {
+      AND: {
+        hash: {
+          in: file_hash_list
+        },
+        chunk_length: {
+          gt: prisma.FILES.fields.chunk_cursor
+        }
+      }
+    }
+  })
+  ConsoleInfo('file_list', file_list)
+  file_list.forEach(async file => {
+    if (file.chunk_cursor < file.chunk_length) {
+      let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
+      SendMessage(address, msg)
+    }
+  })
 }
 
 async function checkMessage(ws, message) {
@@ -615,9 +682,11 @@ async function checkMessage(ws, message) {
   if (json == false) {
     // json格式不合法
     // sendServerMessage(ws, MessageCode.JsonSchemaInvalid)
-    ConsoleWarn(`json格式不合法`)
+    ConsoleWarn(`json schema invalid...`)
     teminateConn(ws)
-  } else {
+  } else if (json.ObjectType) {
+    handleObject(message, json)
+  } else if (json.Action) {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     if (Conns[address] == ws) {
       // 连接已经通过"声明消息"校验过签名
@@ -631,14 +700,9 @@ async function checkMessage(ws, message) {
       if (connAddress != null && connAddress != address) {
         // using different address in same connection
         // sendServerMessage(ws, MessageCode.AddressChanged)
-        if (json.ObjectType && json.ObjectType == ObjectType.Bulletin && VerifyBulletinJson(json)) {
-          CacheBulletin(json)
-        } else {
-          teminateConn(ws)
-        }
       } else {
         if (!VerifyJsonSignature(json)) {
-          //"声明消息"签名不合法
+          // "声明消息"签名不合法
           // sendServerMessage(ws, MessageCode.SignatureInvalid)
           teminateConn(ws)
           return
@@ -651,77 +715,24 @@ async function checkMessage(ws, message) {
           return
         }
 
-        if (connAddress == null && Conns[address] == null) {
+        if (connAddress == null && Conns[address] == null && json.Action == ActionCode.Declare) {
           //new connection and new address
-          //当前连接无对应地址，当前地址无对应连接，全新连接
-          ConsoleInfo(`connection established from client <${address}>`)
+          //当前连接无对应地址，当前地址无对应连接，全新连接，接受客户端声明
+          ConsoleWarn(`client <${address}> connected...`)
           Conns[address] = ws
-          //handleMessage(message, json)
           if (json.URL != null) {
-            Conns[address].send(GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL))
+            // Server Conntion
+            let msg = GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL)
+            SendMessage(address, msg)
           }
 
-          // 获取最新bulletin
-          let bulletin = await prisma.BULLETINS.findFirst({
-            where: {
-              address: address
-            },
-            orderBy: {
-              sequence: "desc"
-            },
-            select: {
-              sequence: true
-            }
-          })
-          let sequence = 1
-          if (bulletin != null) {
-            sequence = bulletin.sequence + 1
-          }
-          let msg = GenBulletinRequest(address, sequence, address, SelfPublicKey, SelfPrivateKey)
-          Conns[address].send(msg)
-
-          // 获取未缓存的bulletin文件
-          let bulletin_list = await prisma.BULLETINS.findMany({
-            orderBy: {
-              sequence: "desc"
-            }
-          })
-          let file_hash_list = []
-          bulletin_list.forEach(async bulletin => {
-            let file_list = JSON.parse(bulletin.file)
-            if (file_list && file_list.length != 0) {
-              file_list.forEach(async file => {
-                file_hash_list.push(file.Hash)
-              })
-            }
-          })
-          file_hash_list = UniqArray(file_hash_list)
-          let file_list = await prisma.FILES.findMany({
-            where: {
-              AND: {
-                hash: {
-                  in: file_hash_list
-                },
-                chunk_length: {
-                  gt: prisma.FILES.fields.chunk_cursor
-                }
-              }
-            }
-          })
-          ConsoleInfo('file_list', file_list)
-          file_list.forEach(async file => {
-            if (file.chunk_cursor < file.chunk_length) {
-              let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
-              Conns[address].send(msg)
-            }
-          })
+          SyncClient(address)
         } else if (Conns[address] != ws && Conns[address].readyState == WebSocket.OPEN) {
           //new connection kick old conection with same address
           //当前地址有对应连接，断开旧连接，当前地址对应到当前连接
           // sendServerMessage(Conns[address], MessageCode.NewConnectionOpening)
           Conns[address].close()
           Conns[address] = ws
-          //handleMessage(message, json)
         } else {
           ws.send("WTF...")
           teminateConn(ws)

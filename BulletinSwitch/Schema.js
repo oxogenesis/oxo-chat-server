@@ -287,7 +287,79 @@ const BulletinReplyListRequestSchema = {
   }
 }
 
+let BulletinReplyListResponseSchema = {
+  "type": "object",
+  "required": ["Action", "Hash", "Page", "List"],
+  "maxProperties": 4,
+  "properties": {
+    "Action": {
+      "type": "number",
+      "const": ActionCode.BulletinReplyListResponse
+    },
+    "Hash": {
+      "type": "string"
+    },
+    "Page": {
+      "type": "number"
+    },
+    "List": {
+      "type": "array",
+      "minItems": 0,
+      // "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["Address", "Sequence", "Hash", "Content", "Timestamp"],
+        "maxProperties": 5,
+        "properties": {
+          "Address": { "type": "string" },
+          "Sequence": { "type": "number" },
+          "Hash": { "type": "string" },
+          "Content": { "type": "string" },
+          "Timestamp": { "type": "number" }
+        }
+      }
+    }
+  }
+}
+
 // >>>chat<<<
+// ChatDH
+const ChatDHSchema = {
+  "type": "object",
+  "required": ["Action", "Partition", "Sequence", "DHPublicKey", "Pair", "To", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 9,
+  "properties": {
+    "Action": {
+      "type": "number",
+      "const": ObjectType.ChatDH
+    },
+    "Partition": {
+      "type": "number"
+    },
+    "Sequence": {
+      "type": "number"
+    },
+    "DHPublicKey": {
+      "type": "string"
+    },
+    "Pair": {
+      "type": "string"
+    },
+    "To": {
+      "type": "string"
+    },
+    "Timestamp": {
+      "type": "number"
+    },
+    "PublicKey": {
+      "type": "string"
+    },
+    "Signature": {
+      "type": "string"
+    }
+  }
+}
+
 const ChatMessageSchema = {
   "type": "object",
   "required": ["ObjectType", "Sequence", "PreHash", "Content", "To", "Timestamp", "PublicKey", "Signature"],
@@ -340,43 +412,6 @@ const ChatMessageSyncSchema = {
     },
     "CurrentSequence": {
       "type": "number"
-    },
-    "To": {
-      "type": "string"
-    },
-    "Timestamp": {
-      "type": "number"
-    },
-    "PublicKey": {
-      "type": "string"
-    },
-    "Signature": {
-      "type": "string"
-    }
-  }
-}
-
-// ChatDH
-const ChatDHSchema = {
-  "type": "object",
-  "required": ["Action", "Partition", "Sequence", "DHPublicKey", "Pair", "To", "Timestamp", "PublicKey", "Signature"],
-  "maxProperties": 9,
-  "properties": {
-    "Action": {
-      "type": "number",
-      "const": ActionCode.ChatDH
-    },
-    "Partition": {
-      "type": "number"
-    },
-    "Sequence": {
-      "type": "number"
-    },
-    "DHPublicKey": {
-      "type": "string"
-    },
-    "Pair": {
-      "type": "string"
     },
     "To": {
       "type": "string"
