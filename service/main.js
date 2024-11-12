@@ -273,6 +273,12 @@ async function CacheECDH(json) {
   } else {
     // TODO update logic not enough
     if (json1 != "") {
+      if (dh.json1 != "") {
+        let old_json1 = JSON.parse(dh.json1)
+        if (json.Timestamp >= old_json1.Timestamp) {
+          return
+        }
+      }
       await prisma.ECDHS.update({
         where: {
           address1_address2_partition_sequence: {
@@ -287,6 +293,12 @@ async function CacheECDH(json) {
         }
       })
     } else if (json2 != "") {
+      if (dh.json2 != "") {
+        let old_json2 = JSON.parse(dh.json2)
+        if (json.Timestamp >= old_json2.Timestamp) {
+          return
+        }
+      }
       await prisma.ECDHS.update({
         where: {
           address1_address2_partition_sequence: {
@@ -677,7 +689,8 @@ async function SyncClient(address) {
 
 async function checkMessage(ws, message) {
   ConsoleInfo(`###################LOG################### Client Message:`)
-  ConsoleInfo(`${message.slice(0, 512)}`)
+  ConsoleInfo(`${message}`)
+  // ConsoleInfo(`${message.slice(0, 512)}`)
   let json = CheckMessageSchema(message)
   if (json == false) {
     // json格式不合法

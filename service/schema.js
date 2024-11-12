@@ -76,8 +76,8 @@ let BulletinSchema = {
     },
     "Quote": {
       "type": "array",
-      "minItems": 0,
-      "maxItems": 8,
+      "minItems": 1,
+      // "maxItems": 8,
       "items": {
         "type": "object",
         "required": ["Address", "Sequence", "Hash"],
@@ -90,8 +90,8 @@ let BulletinSchema = {
     },
     "File": {
       "type": "array",
-      "minItems": 0,
-      "maxItems": 8,
+      "minItems": 1,
+      // "maxItems": 8,
       "items": {
         "type": "object",
         "required": ["Name", "Ext", "Size", "Hash"],
@@ -235,7 +235,7 @@ const BulletinAddressListResponseSchema = {
     },
     "List": {
       "type": "array",
-      "minItems": 0,
+      "minItems": 1,
       // "maxItems": 8,
       "items": {
         "type": "object",
@@ -304,7 +304,7 @@ let BulletinReplyListResponseSchema = {
     },
     "List": {
       "type": "array",
-      "minItems": 0,
+      "minItems": 1,
       // "maxItems": 8,
       "items": {
         "type": "object",
@@ -326,10 +326,10 @@ let BulletinReplyListResponseSchema = {
 // ChatDH
 const ChatDHSchema = {
   "type": "object",
-  "required": ["Action", "Partition", "Sequence", "DHPublicKey", "Pair", "To", "Timestamp", "PublicKey", "Signature"],
+  "required": ["ObjectType", "Partition", "Sequence", "DHPublicKey", "Pair", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 9,
   "properties": {
-    "Action": {
+    "ObjectType": {
       "type": "number",
       "const": ObjectType.ChatDH
     },
@@ -377,10 +377,16 @@ const ChatMessageSchema = {
     },
     "ACK": {
       "type": "array",
-      "minItems": 0,
-      "maxItems": 8,
+      "minItems": 1,
+      // "maxItems": 8,
       "items": {
-        "type": "string",
+        "type": "object",
+        "required": ["Sequence", "Hash"],
+        "maxProperties": 5,
+        "properties": {
+          "Sequence": { "type": "number" },
+          "Hash": { "type": "string" }
+        }
       }
     },
     "Content": {
