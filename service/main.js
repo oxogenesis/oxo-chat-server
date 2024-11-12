@@ -271,7 +271,6 @@ async function CacheECDH(json) {
       })
     }
   } else {
-    // TODO update logic not enough
     if (json1 != "") {
       if (dh.json1 != "") {
         let old_json1 = JSON.parse(dh.json1)
@@ -685,6 +684,29 @@ async function SyncClient(address) {
       SendMessage(address, msg)
     }
   })
+
+  // 获取未配对私聊请求
+  let dh = await prisma.ECDHS.findFirst({
+    where: {
+      OR: [
+        {
+          address1: address,
+          json1: ""
+        },
+        {
+          address2: address,
+          json2: ""
+        }
+      ]
+    }
+  })
+  if (dh != null) {
+    if (dh.json1 == "") {
+      SendMessage(address, dh.json2)
+    } else if (dh.json2 = "") {
+      SendMessage(address, dh.json1)
+    }
+  }
 }
 
 async function checkMessage(ws, message) {
