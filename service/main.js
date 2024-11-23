@@ -703,7 +703,7 @@ async function SyncClient(address) {
   if (dh != null) {
     if (dh.json1 == "") {
       SendMessage(address, dh.json2)
-    } else if (dh.json2 = "") {
+    } else if (dh.json2 == "") {
       SendMessage(address, dh.json1)
     }
   }

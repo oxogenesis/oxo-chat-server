@@ -118,12 +118,12 @@ function VerifyBulletinJson(bulletin) {
 }
 
 function VerifyObjectResponseJson(object_response) {
-  let object_string = JSON.stringify(object_response.object)
+  let object_string = JSON.stringify(object_response.Object)
   let object_hash = QuarterSHA512(object_string)
   let tmp_json = {
     Action: ActionCode.ObjectResponse,
     ObjectHash: object_hash,
-    To: object_response.to,
+    To: object_response.To,
     Timestamp: object_response.Timestamp,
     PublicKey: object_response.PublicKey,
     Signature: object_response.Signature
@@ -142,15 +142,25 @@ function GenDeclare(pk, sk, url) {
 }
 
 function GenObjectResponse(object, to, pk, sk) {
+  let object_string = JSON.stringify(object)
+  let object_hash = QuarterSHA512(object_string)
+  let timestamp = Date.now()
+  let tmp_json = {
+    Action: ActionCode.ObjectResponse,
+    ObjectHash: object_hash,
+    To: to,
+    Timestamp: timestamp,
+    PublicKey: pk
+  }
+  let sig = sign(JSON.stringify(tmp_json), sk)
   let json = {
     Action: ActionCode.ObjectResponse,
     Object: object,
     To: to,
-    Timestamp: Date.now(),
+    Timestamp: timestamp,
     PublicKey: pk,
+    Signature: sig
   }
-  let sig = sign(JSON.stringify(json), sk)
-  json.Signature = sig
   let strJson = JSON.stringify(json)
   return strJson
 }

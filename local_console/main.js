@@ -20,7 +20,7 @@ process.on('uncaughtException', function (err) {
 })
 
 //json
-const Schema = require('./schema.js')
+const Schema = require('./Schema.js')
 
 function cloneJson(json) {
   return JSON.parse(JSON.stringify(json))
@@ -279,15 +279,25 @@ function genDeclare() {
 }
 
 function genObjectResponse(object, to) {
+  let object_string = JSON.stringify(object)
+  let object_hash = QuarterSHA512(object_string)
+  let timestamp = Date.now()
+  let tmp_json = {
+    Action: ActionCode.ObjectResponse,
+    ObjectHash: object_hash,
+    To: to,
+    Timestamp: timestamp,
+    PublicKey: PublicKey
+  }
+  let sig = sign(JSON.stringify(tmp_json), PrivateKey)
   let json = {
     Action: ActionCode.ObjectResponse,
     Object: object,
     To: to,
-    Timestamp: Date.now(),
+    Timestamp: timestamp,
     PublicKey: PublicKey,
+    Signature: sig
   }
-  let sig = sign(JSON.stringify(json), PrivateKey)
-  json.Signature = sig
   let strJson = JSON.stringify(json)
   return strJson
 }
