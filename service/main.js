@@ -552,6 +552,7 @@ async function handleMessage(message, json) {
         signed_at: "desc"
       }
     })
+
     let reply_list = []
     result.forEach(item => {
       let new_item = {}
@@ -562,8 +563,10 @@ async function handleMessage(message, json) {
       new_item.Timestamp = Number(item.signed_at)
       reply_list.push(new_item)
     })
-    let msg = GenBulletinReplyListResponse(json.Hash, json.Page, reply_list)
-    SendMessage(address, msg)
+    if (reply_list.length > 0) {
+      let msg = GenBulletinReplyListResponse(json.Hash, json.Page, reply_list)
+      SendMessage(address, msg)
+    }
   } else if (json.Action == ActionCode.ChatMessageSync) {
     HandelChatMessageSync(json)
   } else if (json.Action == ActionCode.ObjectResponse && VerifyObjectResponseJson(json)) {
@@ -852,8 +855,102 @@ function keepServerConn() {
   }
 }
 
+// 刷新数据关联
+async function refreshData() {
+  // update pre_bulletin's next_hash
+  let bulletin_list = await prisma.BULLETINS.findMany({
+    orderBy: {
+      sequence: "desc"
+    }
+  })
+  for (let i = 0; i < bulletin_list.length; i++) {
+    const bulletin = bulletin_list[i]
+    if (bulletin.sequence != 1) {
+      await prisma.BULLETINS.update({
+        where: {
+          hash: bulletin.pre_hash
+        },
+        data: {
+          next_hash: bulletin.hash
+        }
+      })
+    }
+  }
+
+  // linking quote
+  bulletin_list.forEach(async bulletin => {
+    if (bulletin.quote) {
+      let quote_list = JSON.parse(bulletin.quote)
+      if (quote_list.length != 0) {
+        quote_list.forEach(async quote => {
+          let result = await prisma.QUOTES.findFirst({
+            where: {
+              main_hash: quote.Hash,
+              quote_hash: bulletin.hash
+            }
+          })
+          if (!result) {
+            result = await prisma.QUOTES.create({
+              data: {
+                main_hash: quote.Hash,
+                quote_hash: bulletin.hash,
+                address: bulletin.address,
+                sequence: bulletin.sequence,
+                content: bulletin.content,
+                signed_at: bulletin.signed_at
+              }
+            })
+            if (result) {
+              console.log(`linking`, quote)
+            }
+          }
+        })
+      }
+    }
+  })
+
+  //   // linking file
+  //   console.log(`**************************************linking file`)
+  //   bulletin_list.forEach(async bulletin => {
+  //     if (bulletin.file) {
+  //       let file_list = JSON.parse(bulletin.file)
+  //       // console.log(file_list)
+  //       if (file_list.length != 0) {
+  //         file_list.forEach(async file => {
+  //           console.log(file)
+  //           let result = await prisma.FILES.findFirst({
+  //             where: {
+  //               hash: file.Hash
+  //             }
+  //           })
+
+  //           if (!result) {
+  //             console.log(`resultooooooooooooooooooooooooooooooooooooooooooooo`)
+  //             console.log(result)
+  //             let chunk_length = Math.ceil(file.Size / FileChunkSize)
+  //             result = await prisma.FILES.create({
+  //               data: {
+  //                 hash: file.Hash,
+  //                 name: file.Name,
+  //                 ext: file.Ext,
+  //                 size: file.Size,
+  //                 chunk_length: chunk_length,
+  //                 chunk_cursor: 0
+  //               }
+  //             })
+  //             console.log(`linking`, file)
+  //           }
+  //         })
+  //       }
+  //     }
+  //   })
+}
+
+fs.mkdirSync(path.resolve('./BulletinFile'), { recursive: true })
+
 function go() {
   bulletinStat()
+  refreshData()
   startClientServer()
 
   if (jobServerConn == null) {
@@ -862,98 +959,3 @@ function go() {
 }
 
 go()
-
-// 刷新数据关联
-// async function refreshData() {
-//   //update pre_bulletin's next_hash
-//   let bulletin_list = await prisma.BULLETINS.findMany({
-//     orderBy: {
-//       sequence: "desc"
-//     }
-//   })
-//   for (let i = 0; i < bulletin_list.length; i++) {
-//     const bulletin = bulletin_list[i]
-//     if (bulletin.sequence != 1) {
-//       await prisma.BULLETINS.update({
-//         where: {
-//           hash: bulletin.pre_hash
-//         },
-//         data: {
-//           next_hash: bulletin.hash
-//         }
-//       })
-//     }
-//   }
-
-//   //linking quote
-//   bulletin_list.forEach(async bulletin => {
-//     if (bulletin.quote) {
-//       let quote_list = JSON.parse(bulletin.quote)
-//       if (quote_list.length != 0) {
-//         quote_list.forEach(async quote => {
-//           let result = await prisma.QUOTES.findFirst({
-//             where: {
-//               main_hash: quote.Hash,
-//               quote_hash: bulletin.hash
-//             }
-//           })
-//           if (!result) {
-//             result = await prisma.QUOTES.create({
-//               data: {
-//                 main_hash: quote.Hash,
-//                 quote_hash: bulletin.hash,
-//                 address: bulletin.address,
-//                 sequence: bulletin.sequence,
-//                 content: bulletin.content,
-//                 signed_at: bulletin.signed_at
-//               }
-//             })
-//             if (result) {
-//               console.log(`linking`, quote)
-//             }
-//           }
-//         })
-//       }
-//     }
-//   })
-
-//   //linking file
-//   console.log(`**************************************linking file`)
-//   bulletin_list.forEach(async bulletin => {
-//     if (bulletin.file) {
-//       let file_list = JSON.parse(bulletin.file)
-//       // console.log(file_list)
-//       if (file_list.length != 0) {
-//         file_list.forEach(async file => {
-//           console.log(file)
-//           let result = await prisma.FILES.findFirst({
-//             where: {
-//               hash: file.Hash
-//             }
-//           })
-
-//           if (!result) {
-//             console.log(`resultooooooooooooooooooooooooooooooooooooooooooooo`)
-//             console.log(result)
-//             let chunk_length = Math.ceil(file.Size / FileChunkSize)
-//             result = await prisma.FILES.create({
-//               data: {
-//                 hash: file.Hash,
-//                 name: file.Name,
-//                 ext: file.Ext,
-//                 size: file.Size,
-//                 chunk_length: chunk_length,
-//                 chunk_cursor: 0
-//               }
-//             })
-//             console.log(`linking`, file)
-//           }
-//         })
-//       }
-//     }
-//   })
-
-// }
-// refreshData()
-
-fs.mkdirSync(path.resolve('./BulletinFile'), { recursive: true })
