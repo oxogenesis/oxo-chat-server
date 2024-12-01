@@ -168,7 +168,7 @@ const BulletinRequestSchema = {
 
 const BulletinFileChunkRequestSchema = {
   "type": "object",
-  "required": ["Action", "Hash", "Cursor", "To", "Timestamp", "PublicKey", "Signature"],
+  "required": ["Action", "Hash", "Cursor", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 7,
   "properties": {
     "Action": {
