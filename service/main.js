@@ -72,7 +72,7 @@ function pullBulletin(ws) {
   // clone all bulletin from server
   // pull step 1: fetch all account
   let msg = GenBulletinAddressListRequest(1, SelfPublicKey, SelfPrivateKey)
-  sendMessage(ws, msg)
+  SendMessage(ws, msg)
 }
 
 async function pushBulletin(ws) {
@@ -94,7 +94,7 @@ async function pushBulletin(ws) {
 
   for (const address in bulletin_sequence) {
     let msg = GenBulletinRequest(address, bulletin_sequence[address] + 1, address, SelfPublicKey, SelfPrivateKey)
-    sendMessage(ws, msg)
+    SendMessage(ws, msg)
   }
 }
 
@@ -112,7 +112,7 @@ async function downloadBulletinFile(address) {
     for (let i = 0; i < file_list.length; i++) {
       const file = file_list[i]
       let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
-      sendMessage(Conns[address], msg)
+      SendMessage(Conns[address], msg)
     }
   }
 }
