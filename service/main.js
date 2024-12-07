@@ -156,16 +156,18 @@ async function CacheBulletin(bulletin) {
       }
     })
 
-    if (result && result.sequence != 1) {
-      //update pre_bulletin's next_hash
-      result = await prisma.BULLETINS.update({
-        where: {
-          hash: bulletin.PreHash
-        },
-        data: {
-          next_hash: hash
-        }
-      })
+    if (result) {
+      if (result.sequence != 1) {
+        //update pre_bulletin's next_hash
+        result = await prisma.BULLETINS.update({
+          where: {
+            hash: bulletin.PreHash
+          },
+          data: {
+            next_hash: hash
+          }
+        })
+      }
 
       //create quote
       if (bulletin.Quote) {
