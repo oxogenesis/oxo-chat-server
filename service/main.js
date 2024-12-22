@@ -506,10 +506,10 @@ async function handleMessage(message, json) {
     }
   } else if (json.Action == ActionCode.BulletinRandomRequest) {
     //send random bulletin
-    let bulletin = await prisma.$queryRaw`SELECT * FROM "public"."BULLETINS" ORDER BY RANDOM() LIMIT 1`
-    if (bulletin != null) {
+    let bulletins = await prisma.$queryRaw`SELECT * FROM "public"."BULLETINS" ORDER BY RANDOM() LIMIT 1`
+    if (bulletins != null && bulletins.length != 0) {
       let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-      SendMessage(address, bulletin[0].json)
+      SendMessage(address, bulletins[0].json)
     }
   } else if (json.Action == ActionCode.BulletinAddressListRequest && json.Page > 0) {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
