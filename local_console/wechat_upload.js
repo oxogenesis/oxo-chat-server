@@ -90,6 +90,8 @@ function handleMessage(address, json) {
           let msg = GenObjectResponse(bulletin_json, address, SelfPublicKey, SelfPrivateKey)
           sendMessage(Conns[address], msg)
           ConsoleInfo(`response <<< ${json.Address}#${json.Sequence}`)
+        } else {
+          ConsoleInfo(`response <<< not found...`)
         }
       }
     })
