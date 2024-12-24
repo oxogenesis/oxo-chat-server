@@ -12,16 +12,14 @@ const FileChunkSize = 64 * 1024
 const BulletinFileExtRegex = /jpg|png|jpeg|txt|md/i
 
 // config
-const PostPath = `./`
-const Seed = ""
-// const Seed = oxoKeyPairs.generateSeed("RandomSeed", 'secp256k1')
+const ConfigPath = './wechat_config.json'
 
-const keypair = oxoKeyPairs.deriveKeypair(Seed)
-const Address = oxoKeyPairs.deriveAddress(keypair.publicKey)
-const PublicKey = keypair.publicKey
-const PrivateKey = keypair.privateKey
+let Address
+let PublicKey
+let PrivateKey
+let PostPath
+let BulletinDB
 
-const DBPath = `./${Address}.db`
 let CurrentSequence = 0
 let CurrentPreHash = GenesisHash
 
@@ -100,18 +98,11 @@ function genBulletinJson(sequence, pre_hash, content, timestamp) {
   return json
 }
 
-// db
-if (Fs.existsSync(DBPath)) {
-  Fs.rmSync(DBPath)
-}
-
-let BulletinDB = new Sqlite3.Database(DBPath)
-
-function initBulletinDB() {
+function initBulletinDB(db) {
   // 建表
-  BulletinDB.serialize(() => {
+  db.serialize(() => {
     // 为账号地址起名
-    BulletinDB.run(`CREATE TABLE IF NOT EXISTS BULLETINS(
+    db.run(`CREATE TABLE IF NOT EXISTS BULLETINS(
       hash VARCHAR(32) PRIMARY KEY,
       pre_hash VARCHAR(32),
       address VARCHAR(35) NOT NULL,
@@ -128,9 +119,9 @@ function initBulletinDB() {
   })
 }
 
-async function queryAll(sql) {
+async function queryAll(db, sql) {
   return new Promise((resolve, reject) => {
-    BulletinDB.all(sql, [], (err, items) => {
+    db.all(sql, [], (err, items) => {
       if (err) {
         reject(err)
       } else {
@@ -140,9 +131,9 @@ async function queryAll(sql) {
   })
 }
 
-async function runSql(sql) {
+async function runSql(db, sql) {
   return new Promise((resolve, reject) => {
-    BulletinDB.run(sql, err => {
+    db.run(sql, err => {
       if (err) {
         console.log(err)
         reject(err)
@@ -214,8 +205,8 @@ function loadWechat() {
       BulletinDB.run("BEGIN")
       const insertStatement = BulletinDB.prepare(`INSERT INTO BULLETINS (hash, pre_hash, address, sequence, content, json, signed_at) VALUES (?,?,?,?,?,?,?)`)
       // 遍历数组并插入数据
-      for (const [hash, pre_hash, address, sequence, content, json, signed_at] of bulletin_list) {
-        insertStatement.run(hash, pre_hash, address, sequence, content, json, signed_at)
+      for (const [hash, pre_hash, Address, sequence, content, json, signed_at] of bulletin_list) {
+        insertStatement.run(hash, pre_hash, Address, sequence, content, json, signed_at)
       }
       insertStatement.finalize()
       // 提交事务
@@ -239,13 +230,38 @@ function loadWechat() {
 
 function go() {
   let begin_at = Date.now()
-  initBulletinDB()
-  // gen_bulletin()
+
+  // config
+  let config = Fs.readFileSync(ConfigPath, 'utf8')
+  config = JSON.parse(config)
+  PostPath = config.PostPath
+  let seed = config.Seed
+
+  // seed
+  if (seed == '') {
+    seed = oxoKeyPairs.generateSeed("RandomSeed", 'secp256k1')
+  }
+  const keypair = oxoKeyPairs.deriveKeypair(seed)
+  Address = oxoKeyPairs.deriveAddress(keypair.publicKey)
+  PublicKey = keypair.publicKey
+  PrivateKey = keypair.privateKey
+
+  // db
+  let db_path = `./${Address}.db`
+  if (Fs.existsSync(db_path)) {
+    Fs.rmSync(db_path)
+  }
+  BulletinDB = new Sqlite3.Database(db_path)
+  initBulletinDB(BulletinDB)
+
+  // run
   loadWechat()
+
   let end_at = Date.now()
   console.log(`cost   time:`, end_at - begin_at)
+
   console.log(`use account:`, Address)
-  console.log(`use    seed:`, Seed)
+  console.log(`use    seed:`, seed)
 }
 
 go()
