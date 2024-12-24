@@ -13,6 +13,7 @@ const prisma = new PrismaClient()
 
 // config
 // standalone server
+// const Seed = oxoKeyPairs.generateSeed("RandomSeed", 'secp256k1')
 const SelfURL = "wss://ru.oxo-chat-server.com"
 const Seed = "xxJTfMGZPavnqHhcEcHw5ToPCHftw"
 const keypair = oxoKeyPairs.deriveKeypair(Seed)
@@ -68,14 +69,14 @@ function teminateConn(ws) {
   }
 }
 
-function pullBulletin(ws) {
+function pullBulletin(to) {
   // clone all bulletin from server
   // pull step 1: fetch all account
   let msg = GenBulletinAddressListRequest(1, SelfPublicKey, SelfPrivateKey)
-  SendMessage(ws, msg)
+  SendMessage(to, msg)
 }
 
-async function pushBulletin(ws) {
+async function pushBulletin(to) {
   let bulletin_list = await prisma.BULLETINS.findMany({
     select: {
       address: true,
@@ -94,16 +95,20 @@ async function pushBulletin(ws) {
 
   for (const address in bulletin_sequence) {
     let msg = GenBulletinRequest(address, bulletin_sequence[address] + 1, address, SelfPublicKey, SelfPrivateKey)
-    SendMessage(ws, msg)
+    SendMessage(to, msg)
   }
 }
 
 async function downloadBulletinFile(address) {
   let file_list = await prisma.FILES.findMany({
     where: {
-      chunk_length: {
-        not: prisma.FILES.fields.chunk_cursor
-      }
+      NOT: [
+        {
+          chunk_length: {
+            equals: prisma.FILES.fields.chunk_cursor
+          }
+        }
+      ]
     }
   })
   if (file_list && file_list.length > 0) {
@@ -447,7 +452,7 @@ async function handleObject(message, json) {
   }
 }
 
-async function handleMessage(message, json) {
+async function handleMessage(from, message, json) {
   if (json.To != null) {
     // forward message
     SendMessage(json.To, message)
@@ -533,8 +538,34 @@ async function handleMessage(message, json) {
       new_item.Count = item._count.address
       address_list.push(new_item)
     })
-    let msg = GenBulletinAddressListResponse(json.Page, address_list, SelfPublicKey, SelfPrivateKey)
-    SendMessage(address, msg)
+    if (address_list.length > 0) {
+      let msg = GenBulletinAddressListResponse(json.Page, address_list, SelfPublicKey, SelfPrivateKey)
+      SendMessage(address, msg)
+    }
+  } else if (json.Action == ActionCode.BulletinAddressListResponse) {
+    let items = json.List
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      let bulletin = await prisma.BULLETINS.findFirst({
+        where: {
+          address: item.Address
+        },
+        select: {
+          sequence: true
+        },
+        orderBy: {
+          sequence: "desc"
+        }
+      })
+      let next_sequence = 1
+      if (bulletin) {
+        next_sequence = bulletin.sequence + 1
+      }
+      let bulletin_req = GenBulletinRequest(item.Address, next_sequence, from, SelfPublicKey, SelfPrivateKey)
+      SendMessage(from, bulletin_req)
+    }
+    let msg = GenBulletinAddressListRequest(json.Page + 1, SelfPublicKey, SelfPrivateKey)
+    SendMessage(from, msg)
   } else if (json.Action == ActionCode.BulletinReplyListRequest && json.Page > 0) {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     let result = await prisma.QUOTES.findMany({
@@ -734,7 +765,7 @@ async function checkMessage(ws, message) {
       // 伪造的"公告消息"无法通过接收方校验，也就无法被接受方看见（进而不能被引用），也就不具备传播能力
       // 伪造的"消息"无法通过接收方校验，也就无法被接受方看见
       // 所以服务器端只校验"声明消息"签名的有效性，并与之建立连接，后续消息无需校验签名，降低服务器运算压力
-      handleMessage(message, json)
+      handleMessage(address, message, json)
     } else {
       let connAddress = fetchConnAddress(ws)
       if (connAddress != null && connAddress != address) {
@@ -758,7 +789,7 @@ async function checkMessage(ws, message) {
         if (connAddress == null && Conns[address] == null && json.Action == ActionCode.Declare) {
           //new connection and new address
           //当前连接无对应地址，当前地址无对应连接，全新连接，接受客户端声明
-          ConsoleWarn(`client <${address}> connected...`)
+          ConsoleWarn(`connected <===> client : <${address}>`)
           Conns[address] = ws
           if (json.URL != null) {
             // Server Conntion
@@ -767,7 +798,7 @@ async function checkMessage(ws, message) {
           }
 
           SyncClient(address)
-        } else if (Conns[address] != ws && Conns[address].readyState == WebSocket.OPEN) {
+        } else if (Conns[address] && Conns[address] != ws && Conns[address].readyState == WebSocket.OPEN) {
           //new connection kick old conection with same address
           //当前地址有对应连接，断开旧连接，当前地址对应到当前连接
           // sendServerMessage(Conns[address], MessageCode.NewConnectionOpening)
@@ -818,12 +849,12 @@ function connect(server) {
   ConsoleInfo(server)
   let ws = new WebSocket(server.URL)
   ws.on('open', function open() {
-    ConsoleInfo(`connected <===> ${server.URL}`)
+    ConsoleWarn(`connected <===> ${server.URL}`)
     ws.send(GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL))
     Conns[server.Address] = ws
 
-    pullBulletin(ws)
-    pushBulletin(ws)
+    pullBulletin(server.Address)
+    pushBulletin(server.Address)
     downloadBulletinFile(server.Address)
   })
 
@@ -834,6 +865,7 @@ function connect(server) {
 
   ws.on('close', function close() {
     ConsoleWarn(`disconnected <=X=> ${server.URL}`)
+    teminateConn(ws)
   })
 }
 
