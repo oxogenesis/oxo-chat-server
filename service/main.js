@@ -28,7 +28,7 @@ const Servers = [
   // }
 ]
 
-//keep alive
+// keep alive
 process.on("uncaughtException", function (err) {
   //打印出错误
   ConsoleError(err)
@@ -432,7 +432,7 @@ function SendMessage(address, message) {
   }
 }
 
-async function handleObject(message, json) {
+async function handleObject(from, message, json) {
   if (json.To != null) {
     // forward message
     SendMessage(json.To, message)
@@ -443,7 +443,7 @@ async function handleObject(message, json) {
     //fetch more bulletin
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     let msg = GenBulletinRequest(address, json.Sequence + 1, address, SelfPublicKey, SelfPrivateKey)
-    SendMessage(address, msg)
+    SendMessage(from, msg)
   } else if (json.ObjectType == ObjectType.ChatMessage && VerifyJsonSignature(json)) {
     CacheMessage(json)
   } else if (json.ObjectType == ObjectType.ChatDH && VerifyJsonSignature(json)) {
@@ -756,7 +756,8 @@ async function checkMessage(ws, message) {
     ConsoleWarn(`json schema invalid...`)
     teminateConn(ws)
   } else if (json.ObjectType) {
-    handleObject(message, json)
+    let connAddress = fetchConnAddress(ws)
+    handleObject(connAddress, message, json)
   } else if (json.Action) {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     if (Conns[address] == ws) {
