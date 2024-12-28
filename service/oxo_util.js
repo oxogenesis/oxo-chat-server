@@ -1,4 +1,5 @@
 const oxoKeyPairs = require("oxo-keypairs")
+const { ActionCode, ObjectType } = require('./oxo_const.js')
 const { StrToHex, QuarterSHA512 } = require('./util.js')
 
 function GenSignature(str, sk) {

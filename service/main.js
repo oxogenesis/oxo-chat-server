@@ -5,7 +5,7 @@ const oxoKeyPairs = require("oxo-keypairs")
 const { PrismaClient } = require("@prisma/client")
 const prisma = new PrismaClient()
 
-const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./util.js')
+const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, DelayExec, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./util.js')
 const { ActionCode, ObjectType, GenesisHash, PageSize, FileChunkSize } = require('./oxo_const.js')
 const { VerifyJsonSignature, VerifyBulletinJson, VerifyObjectResponseJson } = require('./oxo_util.js')
 const { GenDeclare, GenBulletinAddressListRequest, GenBulletinAddressListResponse, GenBulletinRequest, GenBulletinFileChunkRequest, GenObjectResponse, GenChatMessageSync, GenBulletinReplyListResponse, GenBulletinFileChunkJson } = require('./msg_generator.js')
@@ -36,6 +36,7 @@ let ServerDaemon = null
 let Conns = {}
 // node conn
 let jobNodeConn = null
+let jobNodeSync = null
 
 // keep alive
 process.on("uncaughtException", function (err) {
@@ -45,13 +46,7 @@ process.on("uncaughtException", function (err) {
   ConsoleError(err.stack)
 })
 
-async function DelayExec(ms) {
-  return new Promise(resolve => {
-    setTimeout(resolve, ms)
-  })
-}
-
-// TODO
+// TODO: server msg
 // function sendServerMessage(ws, msgCode) {
 //   ws.send(strServerMessage(msgCode))
 // }
@@ -99,8 +94,8 @@ async function pushBulletin(to) {
     }
   })
 
-
   for (const address in bulletin_sequence) {
+    await DelayExec(1000)
     let msg = GenBulletinRequest(address, bulletin_sequence[address] + 1, address, SelfPublicKey, SelfPrivateKey)
     SendMessage(to, msg)
   }
@@ -447,7 +442,6 @@ async function handleObject(from, message, json) {
 }
 
 async function handleMessage(from, message, json) {
-  ConsoleWarn(`handleMessage`)
   if (json.To != null) {
     // forward message
     SendMessage(json.To, message)
@@ -538,11 +532,11 @@ async function handleMessage(from, message, json) {
       SendMessage(address, msg)
     }
   } else if (json.Action === ActionCode.BulletinAddressListResponse) {
+    // pull step 2: fetch account latest bulletin
     let items = json.List
-    ConsoleWarn(ActionCode.BulletinAddressListResponse)
     for (let i = 0; i < items.length; i++) {
+      await DelayExec(1000)
       const item = items[i]
-      ConsoleWarn(item)
       let bulletin = await prisma.BULLETINS.findFirst({
         where: {
           address: item.Address
@@ -558,8 +552,25 @@ async function handleMessage(from, message, json) {
       if (bulletin) {
         next_sequence = bulletin.sequence + 1
       }
-      let bulletin_req = GenBulletinRequest(item.Address, next_sequence, from, SelfPublicKey, SelfPrivateKey)
-      SendMessage(from, bulletin_req)
+      if (next_sequence <= item.Count) {
+        let bulletin_req = GenBulletinRequest(item.Address, next_sequence, from, SelfPublicKey, SelfPrivateKey)
+        SendMessage(from, bulletin_req)
+      } else {
+        bulletin = await prisma.BULLETINS.findFirst({
+          where: {
+            AND: {
+              address: item.Address,
+              sequence: item.Count + 1
+            }
+          },
+          select: {
+            json: true
+          }
+        })
+        if (bulletin) {
+          SendMessage(from, bulletin.json)
+        }
+      }
     }
     let msg = GenBulletinAddressListRequest(json.Page + 1, SelfPublicKey, SelfPrivateKey)
     SendMessage(from, msg)
@@ -710,7 +721,7 @@ async function SyncClient(address) {
       }
     }
   })
-  ConsoleInfo('file_list', file_list)
+
   file_list.forEach(async file => {
     if (file.chunk_cursor < file.chunk_length) {
       let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
@@ -753,11 +764,14 @@ async function checkMessage(ws, message) {
     ConsoleWarn(`json schema invalid...`)
     teminateConn(ws)
   } else if (json.ObjectType) {
+    // ConsoleDebug(`checkMessage:${0}`)
     let connAddress = fetchConnAddress(ws)
     handleObject(connAddress, message, json)
   } else if (json.Action) {
+    // ConsoleDebug(`checkMessage:${1}`)
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     if (Conns[address] == ws) {
+      // ConsoleDebug(`checkMessage:${2}`)
       // 连接已经通过"声明消息"校验过签名
       // "声明消息"之外的其他消息，由接收方校验
       // 伪造的"公告消息"无法通过接收方校验，也就无法被接受方看见（进而不能被引用），也就不具备传播能力
@@ -765,11 +779,15 @@ async function checkMessage(ws, message) {
       // 所以服务器端只校验"声明消息"签名的有效性，并与之建立连接，后续消息无需校验签名，降低服务器运算压力
       handleMessage(address, message, json)
     } else {
+      // ConsoleDebug(`checkMessage:${3}`)
       let connAddress = fetchConnAddress(ws)
+      // ConsoleDebug(`checkMessage:${address}`)
+      // ConsoleDebug(`checkMessage:${connAddress}`)
       if (connAddress != null && connAddress != address) {
         // using different address in same connection
         // sendServerMessage(ws, MessageCode.AddressChanged)
       } else {
+        // ConsoleDebug(`checkMessage:${4}`)
         if (!VerifyJsonSignature(json)) {
           // "声明消息"签名不合法
           // sendServerMessage(ws, MessageCode.SignatureInvalid)
@@ -797,6 +815,7 @@ async function checkMessage(ws, message) {
 
           SyncClient(address)
         } else if (Conns[address] && Conns[address] != ws && Conns[address].readyState == WebSocket.OPEN) {
+          // ConsoleDebug(`checkMessage:${5}`)
           //new connection kick old conection with same address
           //当前地址有对应连接，断开旧连接，当前地址对应到当前连接
           // sendServerMessage(Conns[address], MessageCode.NewConnectionOpening)
@@ -814,7 +833,7 @@ async function checkMessage(ws, message) {
 // 同步节点Bulletin数据
 function SyncNode(address) {
   pullBulletin(address)
-  // pushBulletin(address)
+  pushBulletin(address)
   downloadBulletinFile(address)
 }
 
@@ -845,7 +864,7 @@ function startServerDaemon() {
 }
 
 // 连接指定外部节点
-function connect(node) {
+function connectNode(node) {
   ConsoleInfo(`--------------------------connect to node--------------------------`)
   ConsoleWarn(node)
   let ws = new WebSocket(node.URL)
@@ -880,27 +899,36 @@ function keepNodeConn() {
   if (notConnected.length == 0) {
     return
   }
-  ConsoleInfo(`--------------------------keepNodeConn--------------------------`)
+  ConsoleWarn(`--------------------------keepNodeConn--------------------------`)
 
   let random = Math.floor(Math.random() * (notConnected.length))
   let randomNode = notConnected[random]
   if (randomNode != null) {
-    connect(randomNode)
+    connectNode(randomNode)
   }
+}
+
+function keepNodeSync() {
+  ConsoleWarn(`--------------------------keepNodeSync--------------------------`)
+  NodeList.forEach(node => {
+    if (Conns[node.Address]) {
+      SyncNode(node.Address)
+    }
+  })
 }
 
 // 打印bulletin统计信息
 async function bulletinStat() {
   let bulletin_list = await prisma.BULLETINS.findMany()
-  ConsoleInfo(`BulletinCount: ${bulletin_list.length}`)
+  ConsoleWarn(`BulletinCount: ${bulletin_list.length}`)
 
   let file_list = await prisma.FILES.findMany()
-  ConsoleInfo(`****FileCount: ${file_list.length}`)
+  ConsoleWarn(`****FileCount: ${file_list.length}`)
 
   let address_list = await prisma.BULLETINS.groupBy({
     by: "address"
   })
-  ConsoleInfo(`*AddressCount: ${address_list.length}`)
+  ConsoleWarn(`*AddressCount: ${address_list.length}`)
 }
 
 // 刷新数据关联
@@ -957,6 +985,7 @@ async function refreshData() {
     }
   })
 
+  // TODO: file
   //   // linking file
   //   console.log(`**************************************linking file`)
   //   bulletin_list.forEach(async bulletin => {
@@ -1012,6 +1041,8 @@ function main() {
   SelfAddress = oxoKeyPairs.deriveAddress(keypair.publicKey)
   SelfPublicKey = keypair.publicKey
   SelfPrivateKey = keypair.privateKey
+  ConsoleWarn(`use******Seed: ${seed}`)
+  ConsoleWarn(`use***Address: ${SelfAddress}`)
 
   bulletinStat()
   refreshData()
@@ -1019,6 +1050,9 @@ function main() {
 
   if (jobNodeConn == null) {
     jobNodeConn = setInterval(keepNodeConn, 5000)
+  }
+  if (jobNodeSync == null) {
+    jobNodeSync = setInterval(keepNodeSync, 8 * 60 * 60 * 1000)
   }
 }
 

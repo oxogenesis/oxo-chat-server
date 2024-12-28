@@ -42,6 +42,12 @@ function ConsoleDebug(str) {
   console.log(ConsoleColors.redBG, str)
 }
 
+async function DelayExec(ms) {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms)
+  })
+}
+
 // server url
 const url_regex = /^wss:\/\/(?!-)([a-zA-Z0-9-]+)(?<!-)\.(?!-)([a-zA-Z0-9-]+)(?<!-)\.([a-zA-Z]{2,6})$/
 
@@ -111,6 +117,8 @@ module.exports = {
   ConsoleWarn,
   ConsoleError,
   ConsoleDebug,
+
+  DelayExec,
 
   CloneJson,
   UniqArray,
