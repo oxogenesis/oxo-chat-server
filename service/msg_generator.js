@@ -1,6 +1,7 @@
 const oxoKeyPairs = require("oxo-keypairs")
+const { ActionCode, ObjectType } = require('./oxo_const')
 const { GenSignature, SignJson } = require('./oxo_util.js')
-const { QuarterSHA512 } = require('./Util.js')
+const { QuarterSHA512 } = require('./util.js')
 
 function GenDeclare(pk, sk, url) {
   let json = {

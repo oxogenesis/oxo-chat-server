@@ -1,5 +1,5 @@
 const oxoKeyPairs = require("oxo-keypairs")
-const { StrToHex, QuarterSHA512 } = require('./Util.js')
+const { StrToHex, QuarterSHA512 } = require('./util.js')
 
 function GenSignature(str, sk) {
   let strHex = StrToHex(str)
@@ -26,7 +26,7 @@ function VerifyJsonSignature(json) {
   let sig = json.Signature
   delete json.Signature
   let tmpMsg = JSON.stringify(json)
-  if (verifySignature(tmpMsg, sig, json.PublicKey)) {
+  if (VerifySignature(tmpMsg, sig, json.PublicKey)) {
     json.Signature = sig
     return true
   } else {

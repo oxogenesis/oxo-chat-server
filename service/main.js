@@ -5,13 +5,14 @@ const oxoKeyPairs = require("oxo-keypairs")
 const { PrismaClient } = require("@prisma/client")
 const prisma = new PrismaClient()
 
-const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./Util.js')
+const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./util.js')
 const { ActionCode, ObjectType, GenesisHash, PageSize, FileChunkSize } = require('./oxo_const.js')
 const { VerifyJsonSignature, VerifyBulletinJson, VerifyObjectResponseJson } = require('./oxo_util.js')
 const { GenDeclare, GenBulletinAddressListRequest, GenBulletinAddressListResponse, GenBulletinRequest, GenBulletinFileChunkRequest, GenObjectResponse, GenChatMessageSync, GenBulletinReplyListResponse, GenBulletinFileChunkJson } = require('./msg_generator.js')
 const { MsgValidate } = require('./msg_validator.js')
 
 // config
+const ConfigPath = './config.json'
 // config_json =
 // {
 //   "SelfURL": "wss://ru.oxo-chat-server.com",
@@ -23,18 +24,18 @@ const { MsgValidate } = require('./msg_validator.js')
 //     }
 //   ]
 // }
-let SelfURL
+let SelfURL = undefined
 let SelfAddress
 let SelfPublicKey
 let SelfPrivateKey
 
 let NodeList = []
 // client server daemon
-let ClientServer = null
-//client connection
+let ServerDaemon = null
+//client and node connection
 let Conns = {}
 // node conn
-let jobServerConn = null
+let jobNodeConn = null
 
 // keep alive
 process.on("uncaughtException", function (err) {
@@ -50,6 +51,7 @@ async function DelayExec(ms) {
   })
 }
 
+// TODO
 // function sendServerMessage(ws, msgCode) {
 //   ws.send(strServerMessage(msgCode))
 // }
@@ -125,19 +127,6 @@ async function downloadBulletinFile(address) {
       SendMessage(Conns[address], msg)
     }
   }
-}
-
-async function bulletinStat() {
-  let bulletin_list = await prisma.BULLETINS.findMany()
-  ConsoleInfo(`BulletinCount: ${bulletin_list.length}`)
-
-  let file_list = await prisma.FILES.findMany()
-  ConsoleInfo(`****FileCount: ${file_list.length}`)
-
-  let address_list = await prisma.BULLETINS.groupBy({
-    by: "address"
-  })
-  ConsoleInfo(`*AddressCount: ${address_list.length}`)
 }
 
 async function CacheBulletin(bulletin) {
@@ -458,12 +447,13 @@ async function handleObject(from, message, json) {
 }
 
 async function handleMessage(from, message, json) {
+  ConsoleWarn(`handleMessage`)
   if (json.To != null) {
     // forward message
     SendMessage(json.To, message)
   }
 
-  if (json.Action == ActionCode.BulletinRequest) {
+  if (json.Action === ActionCode.BulletinRequest) {
     //send cache bulletin
     let bulletin = await prisma.BULLETINS.findFirst({
       where: {
@@ -478,7 +468,7 @@ async function handleMessage(from, message, json) {
       let address = oxoKeyPairs.deriveAddress(json.PublicKey)
       SendMessage(address, bulletin.json)
     }
-  } else if (json.Action == ActionCode.BulletinFileChunkRequest) {
+  } else if (json.Action === ActionCode.BulletinFileChunkRequest) {
     let file = await prisma.FILES.findFirst({
       where: {
         hash: json.Hash
@@ -514,14 +504,14 @@ async function handleMessage(from, message, json) {
         SendMessage(json.To, msg)
       }
     }
-  } else if (json.Action == ActionCode.BulletinRandomRequest) {
+  } else if (json.Action === ActionCode.BulletinRandomRequest) {
     //send random bulletin
     let bulletins = await prisma.$queryRaw`SELECT * FROM "public"."BULLETINS" ORDER BY RANDOM() LIMIT 1`
     if (bulletins != null && bulletins.length != 0) {
       let address = oxoKeyPairs.deriveAddress(json.PublicKey)
       SendMessage(address, bulletins[0].json)
     }
-  } else if (json.Action == ActionCode.BulletinAddressListRequest && json.Page > 0) {
+  } else if (json.Action === ActionCode.BulletinAddressListRequest && json.Page > 0) {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     let result = await prisma.BULLETINS.groupBy({
       by: "address",
@@ -547,10 +537,12 @@ async function handleMessage(from, message, json) {
       let msg = GenBulletinAddressListResponse(json.Page, address_list, SelfPublicKey, SelfPrivateKey)
       SendMessage(address, msg)
     }
-  } else if (json.Action == ActionCode.BulletinAddressListResponse) {
+  } else if (json.Action === ActionCode.BulletinAddressListResponse) {
     let items = json.List
+    ConsoleWarn(ActionCode.BulletinAddressListResponse)
     for (let i = 0; i < items.length; i++) {
-      const item = items[i];
+      const item = items[i]
+      ConsoleWarn(item)
       let bulletin = await prisma.BULLETINS.findFirst({
         where: {
           address: item.Address
@@ -571,7 +563,7 @@ async function handleMessage(from, message, json) {
     }
     let msg = GenBulletinAddressListRequest(json.Page + 1, SelfPublicKey, SelfPrivateKey)
     SendMessage(from, msg)
-  } else if (json.Action == ActionCode.BulletinReplyListRequest && json.Page > 0) {
+  } else if (json.Action === ActionCode.BulletinReplyListRequest && json.Page > 0) {
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     let result = await prisma.QUOTES.findMany({
       where: {
@@ -605,9 +597,9 @@ async function handleMessage(from, message, json) {
       let msg = GenBulletinReplyListResponse(json.Hash, json.Page, reply_list)
       SendMessage(address, msg)
     }
-  } else if (json.Action == ActionCode.ChatMessageSync) {
+  } else if (json.Action === ActionCode.ChatMessageSync) {
     HandelChatMessageSync(json)
-  } else if (json.Action == ActionCode.ObjectResponse && VerifyObjectResponseJson(json)) {
+  } else if (json.Action === ActionCode.ObjectResponse && VerifyObjectResponseJson(json)) {
     if (json.Object.ObjectType == ObjectType.Bulletin && VerifyBulletinJson(json.Object)) {
       CacheBulletin(json.Object)
       if (json.To == SelfAddress) {
@@ -792,7 +784,7 @@ async function checkMessage(ws, message) {
           return
         }
 
-        if (connAddress == null && Conns[address] == null && json.Action == ActionCode.Declare) {
+        if (connAddress == null && Conns[address] == null && json.Action === ActionCode.Declare) {
           //new connection and new address
           //当前连接无对应地址，当前地址无对应连接，全新连接，接受客户端声明
           ConsoleWarn(`connected <===> client : <${address}>`)
@@ -819,15 +811,23 @@ async function checkMessage(ws, message) {
   }
 }
 
-function startClientServer() {
-  if (ClientServer == null) {
-    ClientServer = new WebSocket.Server({
+// 同步节点Bulletin数据
+function SyncNode(address) {
+  pullBulletin(address)
+  // pushBulletin(address)
+  downloadBulletinFile(address)
+}
+
+// 启动服务器守望进程
+function startServerDaemon() {
+  if (ServerDaemon == null) {
+    ServerDaemon = new WebSocket.Server({
       port: 8000, //to bind on 80, must use "sudo node main.js"
       clientTracking: true,
       maxPayload: 512 * 1024
     })
 
-    ClientServer.on("connection", function connection(ws) {
+    ServerDaemon.on("connection", function connection(ws) {
       ws.on("message", function incoming(buffer) {
         let message = buffer.toString()
         checkMessage(ws, message)
@@ -844,18 +844,17 @@ function startClientServer() {
   }
 }
 
+// 连接指定外部节点
 function connect(node) {
   ConsoleInfo(`--------------------------connect to node--------------------------`)
-  ConsoleInfo(node)
+  ConsoleWarn(node)
   let ws = new WebSocket(node.URL)
   ws.on('open', function open() {
     ConsoleWarn(`connected <===> ${node.URL}`)
     ws.send(GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL))
     Conns[node.Address] = ws
 
-    pullBulletin(node.Address)
-    pushBulletin(node.Address)
-    downloadBulletinFile(node.Address)
+    SyncNode(node.Address)
   })
 
   ws.on('message', function incoming(buffer) {
@@ -888,6 +887,20 @@ function keepNodeConn() {
   if (randomNode != null) {
     connect(randomNode)
   }
+}
+
+// 打印bulletin统计信息
+async function bulletinStat() {
+  let bulletin_list = await prisma.BULLETINS.findMany()
+  ConsoleInfo(`BulletinCount: ${bulletin_list.length}`)
+
+  let file_list = await prisma.FILES.findMany()
+  ConsoleInfo(`****FileCount: ${file_list.length}`)
+
+  let address_list = await prisma.BULLETINS.groupBy({
+    by: "address"
+  })
+  ConsoleInfo(`*AddressCount: ${address_list.length}`)
 }
 
 // 刷新数据关联
@@ -986,8 +999,11 @@ function main() {
   // config
   let config = fs.readFileSync(ConfigPath, 'utf8')
   config = JSON.parse(config)
-  SelfURL = config.SelfURL
+  if (config.SelfURL != '') {
+    SelfURL = config.SelfURL
+  }
   let seed = config.Seed
+  NodeList = config.NodeList
 
   if (seed === "") {
     seed = oxoKeyPairs.generateSeed("RandomSeed", 'secp256k1')
@@ -999,10 +1015,10 @@ function main() {
 
   bulletinStat()
   refreshData()
-  startClientServer()
+  startServerDaemon()
 
-  if (jobServerConn == null) {
-    jobServerConn = setInterval(keepNodeConn, 5000)
+  if (jobNodeConn == null) {
+    jobNodeConn = setInterval(keepNodeConn, 5000)
   }
 }
 
