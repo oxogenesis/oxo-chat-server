@@ -10,7 +10,6 @@ oxo消息服务器
 
 **[app](https://github.com/oxogenesis/oxo-chat-app)**  
 **[client](https://github.com/oxogenesis/oxo-chat-client)**  
-**[router](https://github.com/oxogenesis/oxo-chat-router)**  
 **[server](https://github.com/oxogenesis/oxo-chat-server)**  
 
 # wiki
@@ -21,7 +20,7 @@ oxo消息服务器
 
 # node version
 $ nvm list  
-  * 18.17.1 (Currently using 64-bit executable)  
+  * 22.12.0 (Currently using 64-bit executable)  
 
 # run code
 //start service  
