@@ -1,7 +1,6 @@
-const Fs = require('fs')
-const Crypto = require('crypto')
-const Path = require('path')
-const Sqlite3 = require('sqlite3')
+const fs = require('fs')
+const path = require('path')
+const sqlite3 = require('sqlite3')
 const oxoKeyPairs = require("oxo-keypairs")
 
 const { GenesisHash } = require('./oxo_const.js')
@@ -91,12 +90,12 @@ const dateReg = /^(\d{4})(\d{2})(\d{2})$/
 function prepareBulletins() {
   let lastDate = '20001111'
   let minCount = 0
-  let files = Fs.readdirSync(PostPath)
+  let files = fs.readdirSync(PostPath)
   let bulletin_list = []
   for (let i = 0; i < files.length; i++) {
     const fileName = files[i]
-    let filePath = Path.join(PostPath, fileName)
-    let fileStat = Fs.statSync(filePath)
+    let filePath = path.join(PostPath, fileName)
+    let fileStat = fs.statSync(filePath)
 
     let isFile = fileStat.isFile()
     let isDir = fileStat.isDirectory()
@@ -115,7 +114,7 @@ function prepareBulletins() {
         }
         let timestamp = new Date(year, month - 1, day, 0, min)
         timestamp = timestamp.getTime()
-        let content = Fs.readFileSync(filePath, 'utf8')
+        let content = fs.readFileSync(filePath, 'utf8')
         let bulletin = gen_bulletin(content, timestamp)
         bulletin_list.push(bulletin)
       }
@@ -162,7 +161,7 @@ function main() {
   let begin_at = Date.now()
 
   // config
-  let config = Fs.readFileSync(ConfigPath, 'utf8')
+  let config = fs.readFileSync(ConfigPath, 'utf8')
   config = JSON.parse(config)
   PostPath = config.PostPath
   let seed = config.Seed
@@ -178,10 +177,10 @@ function main() {
 
   // db
   let db_path = `./${Address}.db`
-  if (Fs.existsSync(db_path)) {
-    Fs.rmSync(db_path)
+  if (fs.existsSync(db_path)) {
+    fs.rmSync(db_path)
   }
-  BulletinDB = new Sqlite3.Database(db_path)
+  BulletinDB = new sqlite3.Database(db_path)
   initBulletinDB(BulletinDB)
 
   // run

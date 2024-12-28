@@ -1,12 +1,16 @@
-const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./Util.js')
-const { ActionCode, ObjectType, GenDeclare, GenBulletinAddressListRequest, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, FileChunkSize, VerifyBulletinJson } = require('./OXO.js')
-const { CheckMessageSchema } = require('./Schema.js')
-
 const fs = require('fs')
 const path = require('path')
 const sqlite3 = require('sqlite3')
 const WebSocket = require('ws')
 const oxoKeyPairs = require("oxo-keypairs")
+
+const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./util.js')
+const { ActionCode, ObjectType, FileChunkSize } = require('./oxo_const.js')
+const { VerifyJsonSignature, VerifyBulletinJson } = require('./oxo_util.js')
+const { GenDeclare, GenBulletinAddressListRequest, GenBulletinRequest, GenBulletinFileChunkRequest, GenObjectResponse } = require('./msg_generator.js')
+const { MsgValidate } = require('./msg_validator.js')
+
+
 
 // config
 const Servers = [
@@ -460,7 +464,7 @@ function checkMessage(ws, message) {
   // ConsoleInfo(`###################LOG################### Client Message:`)
   // ConsoleInfo(message)
   // ConsoleInfo(`${message.slice(0, 512)}`)
-  let json = CheckMessageSchema(message)
+  let json = MsgValidate(message)
   if (json == false) {
     // json格式不合法
     // sendServerMessage(ws, MessageCode.JsonSchemaInvalid)
@@ -606,7 +610,7 @@ function startClientServer() {
   }
 }
 
-function go() {
+function main() {
   bulletinStat()
   startClientServer()
 
@@ -615,4 +619,4 @@ function go() {
   }
 }
 
-go()
+main()
