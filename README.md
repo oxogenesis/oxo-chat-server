@@ -122,7 +122,7 @@ server {
 //nvm  
 curl https://raw.githubusercontent.com/creationix/nvm/master/install.sh | bash  
 source ~/.profile  
-nvm install 18.17.1  
+nvm install 22.12.0  
 npm install -g pm2  
 
 //pg  
@@ -142,6 +142,8 @@ git clone https://github.com/oxogenesis/oxo-chat-server
 cd oxo-chat-server/service  
 npm install  
 npx prisma generate  
+npx prisma migrate dev  
+npx prisma migrate deploy  
 pm2 start main.js --name "service"  
 
 //start web  
