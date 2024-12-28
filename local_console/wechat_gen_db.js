@@ -4,12 +4,9 @@ const Path = require('path')
 const Sqlite3 = require('sqlite3')
 const oxoKeyPairs = require("oxo-keypairs")
 
-// const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
-const GenesisHash = 'F4C2EB8A3EBFC7B6D81676D79F928D0E'
-
-const FileMaxSize = 16 * 1024 * 1024
-const FileChunkSize = 64 * 1024
-const BulletinFileExtRegex = /jpg|png|jpeg|txt|md/i
+const { GenesisHash } = require('./oxo_const.js')
+const { GenBulletinJson } = require('./msg_generator.js')
+const { QuarterSHA512 } = require('./util.js')
 
 // config
 const ConfigPath = './wechat_config.json'
@@ -30,73 +27,6 @@ process.on('uncaughtException', function (err) {
   // 打印出错误的调用栈方便调试
   console.log(err.stack)
 })
-
-// crypto
-function hasherSHA512(str) {
-  let sha512 = Crypto.createHash("sha512")
-  sha512.update(str)
-  return sha512.digest('hex')
-}
-
-function halfSHA512(str) {
-  return hasherSHA512(str).toUpperCase().substr(0, 64)
-}
-
-function quarterSHA512(str) {
-  return hasherSHA512(str).toUpperCase().substr(0, 32);
-}
-
-function strToHex(str) {
-  let arr = []
-  let length = str.length
-  for (let i = 0; i < length; i++) {
-    arr[i] = (str.charCodeAt(i).toString(16))
-  }
-  return arr.join('').toUpperCase()
-}
-
-// oxo
-function sign(msg, sk) {
-  let msgHexStr = strToHex(msg)
-  let sig = oxoKeyPairs.sign(msgHexStr, sk)
-  return sig
-}
-
-// message generator
-const ObjectType = {
-  Bulletin: 101,
-  BulletinFileChunk: 102,
-
-  PrivateFile: 201,
-
-  GroupManage: 301,
-  GroupMessage: 302,
-  GroupFile: 303
-}
-
-function genBulletinJson(sequence, pre_hash, content, timestamp) {
-  let content_hash = quarterSHA512(content)
-  let tmp_json = {
-    ObjectType: ObjectType.Bulletin,
-    Sequence: sequence,
-    PreHash: pre_hash,
-    ContentHash: content_hash,
-    Timestamp: timestamp,
-    PublicKey: PublicKey
-  }
-  let sig = sign(JSON.stringify(tmp_json), PrivateKey)
-
-  let json = {
-    ObjectType: ObjectType.Bulletin,
-    Sequence: sequence,
-    PreHash: pre_hash,
-    Content: content,
-    Timestamp: timestamp,
-    PublicKey: PublicKey,
-    Signature: sig
-  }
-  return json
-}
 
 function initBulletinDB(db) {
   // 建表
@@ -145,9 +75,9 @@ async function runSql(db, sql) {
 }
 
 function gen_bulletin(content, timestamp) {
-  let bulletin = genBulletinJson(CurrentSequence + 1, CurrentPreHash, content, timestamp)
+  let bulletin = GenBulletinJson(CurrentSequence + 1, CurrentPreHash, null, null, content, timestamp, PublicKey, PrivateKey)
   let bulletin_str = JSON.stringify(bulletin)
-  let hash = quarterSHA512(bulletin_str)
+  let hash = QuarterSHA512(bulletin_str)
   CurrentSequence = CurrentSequence + 1
   CurrentPreHash = hash
   let value = [hash, bulletin.PreHash, Address, bulletin.Sequence, bulletin.Content, bulletin_str, bulletin.Timestamp]
@@ -228,7 +158,7 @@ function loadWechat() {
   }
 }
 
-function go() {
+function main() {
   let begin_at = Date.now()
 
   // config
@@ -264,4 +194,4 @@ function go() {
   console.log(`use    seed:`, seed)
 }
 
-go()
+main()

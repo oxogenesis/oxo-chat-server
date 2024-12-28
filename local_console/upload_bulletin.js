@@ -1,6 +1,7 @@
-const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, DelayExec, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./Util.js')
-const { ActionCode, ObjectType, GenDeclare, GenBulletinAddressListRequest, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, FileChunkSize, VerifyBulletinJson } = require('./OXO.js')
-const { CheckMessageSchema } = require('./Schema.js')
+const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, DelayExec, UniqArray, CheckServerURL } = require('./util.js')
+const { ActionCode, ObjectType } = require('./oxo_const.js')
+const { VerifyJsonSignature } = require('./oxo_util.js')
+const { MsgValidate } = require('./msg_validator.js')
 
 const fs = require('fs')
 const path = require('path')
@@ -188,7 +189,7 @@ function checkMessage(ws, message) {
   // ConsoleInfo(`###################LOG################### Client Message:`)
   // ConsoleInfo(message)
   // ConsoleInfo(`${message.slice(0, 512)}`)
-  let json = CheckMessageSchema(message)
+  let json = MsgValidate(message)
   if (json == false) {
     // json格式不合法
     // sendServerMessage(ws, MessageCode.JsonSchemaInvalid)
