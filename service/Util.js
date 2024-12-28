@@ -1,5 +1,5 @@
-const Crypto = require('crypto')
-const Fs = require('fs')
+const crypto = require('crypto')
+const fs = require('fs')
 
 const ConsoleColors = {
   'bright': '\x1B[1m%s\x1B[0m', // 亮色
@@ -68,7 +68,7 @@ function Array2Str(array) {
 
 // crypto
 function HasherSHA512(str) {
-  let sha512 = Crypto.createHash("sha512")
+  let sha512 = crypto.createHash("sha512")
   sha512.update(str)
   return sha512.digest('hex')
 }
@@ -94,13 +94,13 @@ function StrToHex(str) {
 function FileHashSync(file_path) {
   let file_content
   try {
-    file_content = Fs.readFileSync(file_path)
+    file_content = fs.readFileSync(file_path)
   } catch (err) {
     console.error(err)
     return null
   }
 
-  const sha1 = Crypto.createHash('sha1')
+  const sha1 = crypto.createHash('sha1')
   sha1.update(file_content)
   return sha1.digest('hex').toUpperCase()
 }

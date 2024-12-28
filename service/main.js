@@ -1,32 +1,40 @@
-const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./Util.js')
-const { ActionCode, ObjectType, GenesisHash, PageSize, GenDeclare, GenBulletinAddressListRequest, GenBulletinAddressListResponse, GenBulletinRequest, VerifyJsonSignature, GenBulletinFileChunkRequest, GenObjectResponse, GenChatMessageSync, GenBulletinReplyListResponse, GenBulletinFileChunkJson, FileChunkSize, VerifyBulletinJson, VerifyObjectResponseJson } = require('./OXO.js')
-const { CheckMessageSchema } = require('./Schema.js')
-
 const fs = require('fs')
 const path = require('path')
 const WebSocket = require('ws')
 const oxoKeyPairs = require("oxo-keypairs")
 const { PrismaClient } = require("@prisma/client")
-
 const prisma = new PrismaClient()
 
+const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./Util.js')
+const { ActionCode, ObjectType, GenesisHash, PageSize, FileChunkSize } = require('./oxo_const.js')
+const { VerifyJsonSignature, VerifyBulletinJson, VerifyObjectResponseJson } = require('./oxo_util.js')
+const { GenDeclare, GenBulletinAddressListRequest, GenBulletinAddressListResponse, GenBulletinRequest, GenBulletinFileChunkRequest, GenObjectResponse, GenChatMessageSync, GenBulletinReplyListResponse, GenBulletinFileChunkJson } = require('./msg_generator.js')
+const { MsgValidate } = require('./msg_validator.js')
 
 // config
-// standalone server
-// const Seed = oxoKeyPairs.generateSeed("RandomSeed", 'secp256k1')
-const SelfURL = "wss://ru.oxo-chat-server.com"
-const Seed = "xxJTfMGZPavnqHhcEcHw5ToPCHftw"
-const keypair = oxoKeyPairs.deriveKeypair(Seed)
-const SelfAddress = oxoKeyPairs.deriveAddress(keypair.publicKey)
-const SelfPublicKey = keypair.publicKey
-const SelfPrivateKey = keypair.privateKey
+// config_json =
+// {
+//   "SelfURL": "wss://ru.oxo-chat-server.com",
+//   "Seed": "xxJTfMGZPavnqHhcEcHw5ToPCHftw",
+//   "NodeList": [
+//     {
+//       "URL": "wss://ru.oxo-chat-server.com",
+//       "Address": "ospxTHwV9YJEq5g6h3MZy9ASs8EP3vY4L6"
+//     }
+//   ]
+// }
+let SelfURL
+let SelfAddress
+let SelfPublicKey
+let SelfPrivateKey
 
-const Servers = [
-  // {
-  //   URL: "wss://ru.oxo-chat-server.com",
-  //   Address: "ospxTHwV9YJEq5g6h3MZy9ASs8EP3vY4L6"
-  // }
-]
+let NodeList = []
+// client server daemon
+let ClientServer = null
+//client connection
+let Conns = {}
+// node conn
+let jobServerConn = null
 
 // keep alive
 process.on("uncaughtException", function (err) {
@@ -45,9 +53,6 @@ async function DelayExec(ms) {
 // function sendServerMessage(ws, msgCode) {
 //   ws.send(strServerMessage(msgCode))
 // }
-
-//client connection
-let Conns = {}
 
 function fetchConnAddress(ws) {
   for (let address in Conns) {
@@ -219,10 +224,10 @@ async function CacheBulletin(bulletin) {
         })
       }
 
-      //Brocdcast to Servers
-      for (let i in Servers) {
-        let msg = GenObjectResponse(bulletin, Servers[i].Address, SelfPublicKey, SelfPrivateKey)
-        SendMessage(Servers[i].Address, msg)
+      //Brocdcast to NodeList
+      for (let i in NodeList) {
+        let msg = GenObjectResponse(bulletin, NodeList[i].Address, SelfPublicKey, SelfPrivateKey)
+        SendMessage(NodeList[i].Address, msg)
       }
     }
   }
@@ -749,7 +754,7 @@ async function checkMessage(ws, message) {
   ConsoleInfo(`###################LOG################### Client Message:`)
   ConsoleInfo(`${message}`)
   // ConsoleInfo(`${message.slice(0, 512)}`)
-  let json = CheckMessageSchema(message)
+  let json = MsgValidate(message)
   if (json == false) {
     // json格式不合法
     // sendServerMessage(ws, MessageCode.JsonSchemaInvalid)
@@ -814,9 +819,6 @@ async function checkMessage(ws, message) {
   }
 }
 
-// client server
-let ClientServer = null
-
 function startClientServer() {
   if (ClientServer == null) {
     ClientServer = new WebSocket.Server({
@@ -842,21 +844,18 @@ function startClientServer() {
   }
 }
 
-// server conn
-let jobServerConn = null
-
-function connect(server) {
-  ConsoleInfo(`--------------------------connect to server--------------------------`)
-  ConsoleInfo(server)
-  let ws = new WebSocket(server.URL)
+function connect(node) {
+  ConsoleInfo(`--------------------------connect to node--------------------------`)
+  ConsoleInfo(node)
+  let ws = new WebSocket(node.URL)
   ws.on('open', function open() {
-    ConsoleWarn(`connected <===> ${server.URL}`)
+    ConsoleWarn(`connected <===> ${node.URL}`)
     ws.send(GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL))
-    Conns[server.Address] = ws
+    Conns[node.Address] = ws
 
-    pullBulletin(server.Address)
-    pushBulletin(server.Address)
-    downloadBulletinFile(server.Address)
+    pullBulletin(node.Address)
+    pushBulletin(node.Address)
+    downloadBulletinFile(node.Address)
   })
 
   ws.on('message', function incoming(buffer) {
@@ -865,28 +864,29 @@ function connect(server) {
   })
 
   ws.on('close', function close() {
-    ConsoleWarn(`disconnected <=X=> ${server.URL}`)
+    ConsoleWarn(`disconnected <=X=> ${node.URL}`)
     teminateConn(ws)
   })
 }
 
-function keepServerConn() {
+// 尝试连接外部节点（随机选择1个未建立连接的节点）
+function keepNodeConn() {
   let notConnected = []
-  Servers.forEach(server => {
-    if (Conns[server.Address] == undefined) {
-      notConnected.push(server)
+  NodeList.forEach(node => {
+    if (Conns[node.Address] == undefined) {
+      notConnected.push(node)
     }
   })
 
   if (notConnected.length == 0) {
     return
   }
-  ConsoleInfo(`--------------------------keepServerConn--------------------------`)
+  ConsoleInfo(`--------------------------keepNodeConn--------------------------`)
 
   let random = Math.floor(Math.random() * (notConnected.length))
-  let randomServer = notConnected[random]
-  if (randomServer != null) {
-    connect(randomServer)
+  let randomNode = notConnected[random]
+  if (randomNode != null) {
+    connect(randomNode)
   }
 }
 
@@ -981,16 +981,29 @@ async function refreshData() {
   //   })
 }
 
-fs.mkdirSync(path.resolve('./BulletinFile'), { recursive: true })
+function main() {
+  fs.mkdirSync(path.resolve('./BulletinFile'), { recursive: true })
+  // config
+  let config = fs.readFileSync(ConfigPath, 'utf8')
+  config = JSON.parse(config)
+  SelfURL = config.SelfURL
+  let seed = config.Seed
 
-function go() {
+  if (seed === "") {
+    seed = oxoKeyPairs.generateSeed("RandomSeed", 'secp256k1')
+  }
+  let keypair = oxoKeyPairs.deriveKeypair(seed)
+  SelfAddress = oxoKeyPairs.deriveAddress(keypair.publicKey)
+  SelfPublicKey = keypair.publicKey
+  SelfPrivateKey = keypair.privateKey
+
   bulletinStat()
   refreshData()
   startClientServer()
 
   if (jobServerConn == null) {
-    jobServerConn = setInterval(keepServerConn, 5000)
+    jobServerConn = setInterval(keepNodeConn, 5000)
   }
 }
 
-go()
+main()
