@@ -226,14 +226,14 @@ function CacheBulletin(from, bulletin) {
   if (VerifyBulletinJson(bulletin)) {
     let timestamp = Date.now()
     let hash = QuarterSHA512(JSON.stringify(bulletin))
-    let content = bulletin.Content.replace(/'/, "''")
-    let str_bulletin = JSON.stringify(bulletin).replace(/'/, "''")
+    let content = bulletin.Content.replaceAll(/'/g, "''")
+    let str_bulletin = JSON.stringify(bulletin).replaceAll(/'/g, "''")
     let SQL = `INSERT INTO BULLETINS (hash, pre_hash, address, sequence, content, quote, file, json, signed_at, created_at)
       VALUES ('${hash}', '${bulletin.PreHash}', '${address}', '${bulletin.Sequence}', '${content}', '${JSON.stringify(bulletin.Quote)}', '${JSON.stringify(bulletin.File)}', '${str_bulletin}', ${bulletin.Timestamp}, ${timestamp})`
     DB.run(SQL, err => {
       if (err) {
         ConsoleError(err)
-        // ConsoleWarn(SQL)
+        ConsoleWarn(SQL)
       } else {
         let file_list = bulletin.File
         if (file_list && file_list.length > 0) {
