@@ -4,13 +4,11 @@ const sqlite3 = require('sqlite3')
 const WebSocket = require('ws')
 const oxoKeyPairs = require("oxo-keypairs")
 
-const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL } = require('./util.js')
+const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, FileHashSync, QuarterSHA512, UniqArray, CheckServerURL, DelayExec } = require('./util.js')
 const { ActionCode, ObjectType, FileChunkSize } = require('./oxo_const.js')
 const { VerifyJsonSignature, VerifyBulletinJson } = require('./oxo_util.js')
 const { GenDeclare, GenBulletinAddressListRequest, GenBulletinRequest, GenBulletinFileChunkRequest, GenObjectResponse } = require('./msg_generator.js')
 const { MsgValidate } = require('./msg_validator.js')
-
-
 
 // config
 const Servers = [
@@ -19,24 +17,14 @@ const Servers = [
     Address: "ospxTHwV9YJEq5g6h3MZy9ASs8EP3vY4L6"
   }
 ]
-const SelfURL = 'ws://127.0.0.1:8000'
 
-function addServer(address, url) {
-  // TODO oxo.txt
-  Servers.push({
-    URL: url,
-    Address: address
-  })
-  Servers = UniqArray(Servers)
-}
-// const Seed = "your_seed"
 const Seed = oxoKeyPairs.generateSeed("RandomSeed", 'secp256k1')
 const keypair = oxoKeyPairs.deriveKeypair(Seed)
 const SelfAddress = oxoKeyPairs.deriveAddress(keypair.publicKey)
 const SelfPublicKey = keypair.publicKey
 const SelfPrivateKey = keypair.privateKey
-ConsoleInfo(`use    seed: ${Seed}`)
-ConsoleInfo(`use account: ${SelfAddress}`)
+ConsoleWarn(`use    seed: ${Seed}`)
+ConsoleWarn(`use account: ${SelfAddress}`)
 
 // keep alive
 process.on('uncaughtException', function (err) {
@@ -71,19 +59,6 @@ function initDB() {
       }
     })
 
-    DB.run(`CREATE TABLE IF NOT EXISTS QUOTES(
-      main_hash VARCHAR(32) NOT NULL,
-      quote_hash VARCHAR(32) NOT NULL,
-      address VARCHAR(35) NOT NULL,
-      sequence INTEGER NOT NULL,
-      content TEXT NOT NULL,
-      signed_at INTEGER NOT NULL,
-      PRIMARY KEY ( main_hash, quote_hash ) )`, err => {
-      if (err) {
-        ConsoleError(err)
-      }
-    })
-
     DB.run(`CREATE TABLE IF NOT EXISTS FILES(
       hash VARCHAR(32) PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
@@ -100,9 +75,7 @@ function initDB() {
 
 initDB()
 
-// ws
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-//  Server Connections
+//  Node Connections
 let Conns = {}
 
 function fetchConnAddress(ws) {
@@ -112,6 +85,13 @@ function fetchConnAddress(ws) {
     }
   }
   return null
+}
+
+function SendMessage(address, message) {
+  if (Conns[address] != null && Conns[address].readyState == WebSocket.OPEN) {
+    // 對方在綫
+    Conns[address].send(`${message}`)
+  }
 }
 
 function teminateConn(ws) {
@@ -124,20 +104,14 @@ function teminateConn(ws) {
   }
 }
 
-function sendMessage(ws, msg) {
-  if (ws != null && ws.readyState == WebSocket.OPEN) {
-    ws.send(msg)
-  }
-}
-
-function pullBulletin(ws) {
+function pullBulletin(address) {
   // clone all bulletin from server
   // pull step 1: fetch all account
   let msg = GenBulletinAddressListRequest(1, SelfPublicKey, SelfPrivateKey)
-  sendMessage(ws, msg)
+  SendMessage(address, msg)
 }
 
-function pushBulletin(ws) {
+function pushBulletin(address) {
   let SQL = `SELECT address, sequence FROM BULLETINS`
   DB.all(SQL, (err, items) => {
     if (err) {
@@ -155,7 +129,7 @@ function pushBulletin(ws) {
 
       for (const address in bulletin_sequence) {
         let msg = GenBulletinRequest(address, bulletin_sequence[address] + 1, address, SelfPublicKey, SelfPrivateKey)
-        sendMessage(ws, msg)
+        SendMessage(address, msg)
       }
     }
   })
@@ -173,7 +147,7 @@ function downloadBulletinFile(address) {
         for (let i = 0; i < files.length; i++) {
           const file = files[i]
           let msg = GenBulletinFileChunkRequest(file.hash, file.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
-          sendMessage(Conns[address], msg)
+          SendMessage(address, msg)
         }
       }
     }
@@ -186,7 +160,7 @@ function bulletinStat() {
     if (err) {
       ConsoleError(err)
     } else {
-      ConsoleInfo(`BulletinCount: ${items.length}`)
+      ConsoleWarn(`BulletinCount: ${items.length}`)
     }
   })
 
@@ -195,7 +169,7 @@ function bulletinStat() {
     if (err) {
       ConsoleError(err)
     } else {
-      ConsoleInfo(`****FileCount: ${items.length}`)
+      ConsoleWarn(`****FileCount: ${items.length}`)
     }
   })
 
@@ -204,24 +178,7 @@ function bulletinStat() {
     if (err) {
       ConsoleError(err)
     } else {
-      ConsoleInfo(`*AddressCount: ${items.length}`)
-    }
-  })
-}
-
-// function
-function fetchNextBulletin(ws, address) {
-  let SQL = `SELECT * FROM BULLETINS WHERE address = "${address}" ORDER BY sequence DESC`
-  DB.get(SQL, (err, item) => {
-    if (err) {
-      ConsoleError(err)
-    } else {
-      let local_seq = 0
-      if (item != null) {
-        local_seq = item.sequence
-      }
-      let msg = GenBulletinRequest(address, local_seq + 1, address, SelfPublicKey, SelfPrivateKey)
-      sendMessage(ws, msg)
+      ConsoleWarn(`*AddressCount: ${items.length}`)
     }
   })
 }
@@ -263,17 +220,20 @@ function fetchUnsaveFile(address) {
   })
 }
 
-function CacheBulletin(ws, bulletin) {
+function CacheBulletin(from, bulletin) {
   let address = oxoKeyPairs.deriveAddress(bulletin.PublicKey)
 
   if (VerifyBulletinJson(bulletin)) {
     let timestamp = Date.now()
     let hash = QuarterSHA512(JSON.stringify(bulletin))
+    let content = bulletin.Content.replace(/'/, "''")
+    let str_bulletin = JSON.stringify(bulletin).replace(/'/, "''")
     let SQL = `INSERT INTO BULLETINS (hash, pre_hash, address, sequence, content, quote, file, json, signed_at, created_at)
-      VALUES ('${hash}', '${bulletin.PreHash}', '${address}', '${bulletin.Sequence}', '${bulletin.Content}', '${JSON.stringify(bulletin.Quote)}', '${JSON.stringify(bulletin.File)}', '${JSON.stringify(bulletin)}', ${bulletin.Timestamp}, ${timestamp})`
+      VALUES ('${hash}', '${bulletin.PreHash}', '${address}', '${bulletin.Sequence}', '${content}', '${JSON.stringify(bulletin.Quote)}', '${JSON.stringify(bulletin.File)}', '${str_bulletin}', ${bulletin.Timestamp}, ${timestamp})`
     DB.run(SQL, err => {
       if (err) {
         ConsoleError(err)
+        // ConsoleWarn(SQL)
       } else {
         let file_list = bulletin.File
         if (file_list && file_list.length > 0) {
@@ -293,43 +253,7 @@ function CacheBulletin(ws, bulletin) {
                       ConsoleError(err)
                     } else {
                       let msg = GenBulletinFileChunkRequest(file.Hash, 1, address, SelfPublicKey, SelfPrivateKey)
-                      sendMessage(ws, msg)
-                    }
-                  })
-                }
-              }
-            })
-          }
-        }
-
-        let quote_list = bulletin.Quote
-        if (quote_list && quote_list.length > 0) {
-          for (let i = 0; i < quote_list.length; i++) {
-            const quote = quote_list[i]
-            SQL = `SELECT * FROM QUOTES WHERE main_hash = "${quote.Hash}" AND quote_hash = "${hash}"`
-            DB.get(SQL, (err, item) => {
-              if (err) {
-                ConsoleError(err)
-              } else {
-                if (item == null) {
-                  SQL = `INSERT INTO QUOTES (main_hash, quote_hash, address, sequence, content, signed_at)
-                    VALUES ('${quote.Hash}', '${hash}', '${address}', ${bulletin.Sequence}, '${bulletin.Content}', ${bulletin.Timestamp})`
-                  DB.run(SQL, err => {
-                    if (err) {
-                      ConsoleError(err)
-                    } else {
-                    }
-                  })
-
-                  SQL = `SELECT * FROM BULLETINS WHERE hash = "${quote.Hash}"`
-                  DB.get(SQL, (err, quote_bulletin) => {
-                    if (err) {
-                      ConsoleError(err)
-                    } else {
-                      if (quote_bulletin == null) {
-                        // 被引用公告未被缓存
-                        fetchNextBulletin(ws, quote.Address)
-                      }
+                      SendMessage(from, msg)
                     }
                   })
                 }
@@ -340,7 +264,7 @@ function CacheBulletin(ws, bulletin) {
 
         ConsoleInfo(`CacheBulletin:${address}#${bulletin.Sequence}`)
         let msg = GenBulletinRequest(address, bulletin.Sequence + 1, address, SelfPublicKey, SelfPrivateKey)
-        sendMessage(ws, msg)
+        SendMessage(from, msg)
       }
     })
   } else {
@@ -348,12 +272,12 @@ function CacheBulletin(ws, bulletin) {
   }
 }
 
-function handleMessage(address, json) {
+function handleMessage(from, json) {
   // ConsoleInfo(json)
   if (json.To != null) {
     // cache bulletin
     if (json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.Bulletin) {
-      CacheBulletin(Conns[address], json.Object)
+      CacheBulletin(from, json.Object)
     } else if (json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.BulletinFileChunk) {
       // cache bulletin file
       let SQL = `SELECT * FROM FILES WHERE hash = "${json.Object.Hash}"`
@@ -377,8 +301,8 @@ function handleMessage(address, json) {
                   ConsoleInfo(`CacheBulletinFile:${json.Object.Hash}#${current_chunk_cursor}/${bulletin_file.chunk_length}`)
                   if (current_chunk_cursor < bulletin_file.chunk_length) {
                     // fetch next file chunk
-                    let msg = GenBulletinFileChunkRequest(json.Object.Hash, current_chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
-                    sendMessage(Conns[address], msg)
+                    let msg = GenBulletinFileChunkRequest(json.Object.Hash, current_chunk_cursor + 1, from, SelfPublicKey, SelfPrivateKey)
+                    SendMessage(from, msg)
                   } else {
                     // compare hash
                     let hash = FileHashSync(path.resolve(file_path))
@@ -390,7 +314,7 @@ function handleMessage(address, json) {
                           ConsoleError(err)
                         } else {
                           let msg = GenBulletinFileChunkRequest(json.Object.Hash, 1, address, SelfPublicKey, SelfPrivateKey)
-                          sendMessage(Conns[address], msg)
+                          SendMessage(from, msg)
                         }
                       })
                     }
@@ -416,7 +340,7 @@ function handleMessage(address, json) {
           let address = oxoKeyPairs.deriveAddress(json.PublicKey)
           let bulletin_json = JSON.parse(item.json)
           let msg = GenObjectResponse(bulletin_json, address, SelfPublicKey, SelfPrivateKey)
-          sendMessage(Conns[address], msg)
+          SendMessage(from, msg)
           ConsoleInfo(`response <<< ${json.Address}#${json.Sequence}`)
         } else {
           ConsoleInfo(`not found === ${json.Address}#${json.Sequence}`)
@@ -432,52 +356,66 @@ function handleMessage(address, json) {
               // sync from server
               if (local_seq < json.Sequence - 1) {
                 let msg = GenBulletinRequest(SelfAddress, local_seq + 1, SelfAddress, SelfPublicKey, SelfPrivateKey)
-                sendMessage(Conns[address], msg)
+                SendMessage(from, msg)
               }
             }
           })
         }
       }
     })
-  } else if (json.To == SelfAddress && json.Action == ActionCode.ObjectResponse && json.Object.ObjectType == ObjectType.Bulletin) {
-    CacheBulletin(Conns[address], json.Object)
-    // fetch more bulletin
-    let msg = GenBulletinRequest(SelfAddress, json.Object.Sequence + 1, SelfAddress, SelfPublicKey, SelfPrivateKey)
-    sendMessage(Conns[address], msg)
   } else if (json.Action == ActionCode.BulletinAddressListResponse) {
     let account_list = json.List
     // pull step 2: fetch all account's bulletin
-    if (account_list.length > 0) {
-      for (let i = 0; i < account_list.length; i++) {
-        const account = account_list[i]
-        fetchNextBulletin(Conns[address], account.Address)
-      }
+    for (let i = 0; i < account_list.length; i++) {
+      DelayExec(1000)
+      const account = account_list[i]
+      SQL = `SELECT * FROM BULLETINS WHERE address = "${account.Address}" ORDER BY sequence DESC`
+      DB.get(SQL, (err, item) => {
+        if (err) {
+          ConsoleError(err)
+        } else {
+          let local_seq = 0
+          if (item != null) {
+            local_seq = item.sequence
+          }
 
-      let next_page = json.Page + 1
-      let msg = GenBulletinAddressListRequest(next_page, SelfPublicKey, SelfPrivateKey)
-      sendMessage(Conns[address], msg)
+          if (local_seq < account.Count) {
+            let msg = GenBulletinRequest(account.Address, local_seq + 1, account.Address, SelfPublicKey, SelfPrivateKey)
+            SendMessage(from, msg)
+          } else if (local_seq > account.Count) {
+            SendMessage(from, item.json)
+          }
+        }
+      })
     }
+
+    let next_page = json.Page + 1
+    let msg = GenBulletinAddressListRequest(next_page, SelfPublicKey, SelfPrivateKey)
+    SendMessage(from, msg)
   }
 }
 
-function checkMessage(ws, message) {
-  // ConsoleInfo(`###################LOG################### Client Message:`)
-  // ConsoleInfo(message)
+async function checkMessage(ws, message) {
+  ConsoleInfo(`###################LOG################### Client Message:`)
+  // ConsoleInfo(`${message}`)
   // ConsoleInfo(`${message.slice(0, 512)}`)
   let json = MsgValidate(message)
   if (json == false) {
     // json格式不合法
     // sendServerMessage(ws, MessageCode.JsonSchemaInvalid)
-    ConsoleWarn(`json格式不合法`)
+    ConsoleWarn(`json schema invalid...`)
     teminateConn(ws)
-  } else {
-    if (json.ObjectType == ObjectType.Bulletin) {
-      CacheBulletin(ws, json)
-      return
+  } else if (json.ObjectType) {
+    // ConsoleDebug(`checkMessage:${0}`)
+    let connAddress = fetchConnAddress(ws)
+    if (json.ObjectType == ObjectType.Bulletin && VerifyBulletinJson(json)) {
+      CacheBulletin(connAddress, json)
     }
-
+  } else if (json.Action) {
+    // ConsoleDebug(`checkMessage:${1}`)
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     if (Conns[address] == ws) {
+      // ConsoleDebug(`checkMessage:${2}`)
       // 连接已经通过"声明消息"校验过签名
       // "声明消息"之外的其他消息，由接收方校验
       // 伪造的"公告消息"无法通过接收方校验，也就无法被接受方看见（进而不能被引用），也就不具备传播能力
@@ -485,12 +423,15 @@ function checkMessage(ws, message) {
       // 所以服务器端只校验"声明消息"签名的有效性，并与之建立连接，后续消息无需校验签名，降低服务器运算压力
       handleMessage(address, json)
     } else {
+      // ConsoleDebug(`checkMessage:${3}`)
       let connAddress = fetchConnAddress(ws)
+      // ConsoleDebug(`checkMessage:${address}`)
+      // ConsoleDebug(`checkMessage:${connAddress}`)
       if (connAddress != null && connAddress != address) {
         // using different address in same connection
         // sendServerMessage(ws, MessageCode.AddressChanged)
-        teminateConn(ws)
       } else {
+        // ConsoleDebug(`checkMessage:${4}`)
         if (!VerifyJsonSignature(json)) {
           // "声明消息"签名不合法
           // sendServerMessage(ws, MessageCode.SignatureInvalid)
@@ -505,28 +446,18 @@ function checkMessage(ws, message) {
           return
         }
 
-        if (connAddress == null && Conns[address] == null) {
+        if (connAddress == null && Conns[address] == null && json.Action === ActionCode.Declare) {
           // new connection and new address
-          // 当前连接无对应地址，当前地址无对应连接，全新连接
-          ConsoleInfo(`connection established from client <${address}>`)
+          // 当前连接无对应地址，当前地址无对应连接，全新连接，接受客户端声明
+          ConsoleWarn(`connected <===> client : <${address}>`)
           Conns[address] = ws
-          if (json.ActionCode == ActionCode.Declare && CheckServerURL(json.URL)) {
-            addServer(address, json.URL)
-          }
-          // handleMessage(message, json)
-
-          // 获取最新bulletin
-          fetchNextBulletin(ws, address)
-
-          // 获取未缓存的bulletin文件
-          fetchUnsaveFile(ws)
-        } else if (Conns[address] != ws && Conns[address].readyState == WebSocket.OPEN) {
+        } else if (Conns[address] && Conns[address] != ws && Conns[address].readyState == WebSocket.OPEN) {
+          // ConsoleDebug(`checkMessage:${5}`)
           // new connection kick old conection with same address
           // 当前地址有对应连接，断开旧连接，当前地址对应到当前连接
           // sendServerMessage(Conns[address], MessageCode.NewConnectionOpening)
           Conns[address].close()
           Conns[address] = ws
-          // handleMessage(message, json)
         } else {
           ws.send("WTF...")
           teminateConn(ws)
@@ -536,18 +467,18 @@ function checkMessage(ws, message) {
   }
 }
 
-function connect(server) {
-  ConsoleInfo(`--------------------------connect to server--------------------------`)
-  ConsoleInfo(server)
-  let ws = new WebSocket(server.URL)
+function connect(node) {
+  ConsoleInfo(`--------------------------connect to node--------------------------`)
+  ConsoleInfo(node)
+  let ws = new WebSocket(node.URL)
   ws.on('open', function open() {
-    ConsoleInfo(`connected <===> ${server.URL}`)
-    ws.send(GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL))
-    Conns[server.Address] = ws
+    ConsoleInfo(`connected <===> ${node.URL}`)
+    ws.send(GenDeclare(SelfPublicKey, SelfPrivateKey))
+    Conns[node.Address] = ws
 
-    pullBulletin(ws)
-    pushBulletin(ws)
-    downloadBulletinFile(server.Address)
+    pullBulletin(node.Address)
+    pushBulletin(node.Address)
+    downloadBulletinFile(node.Address)
   })
 
   ws.on('message', function incoming(buffer) {
@@ -556,21 +487,19 @@ function connect(server) {
   })
 
   ws.on('close', function close() {
-    ConsoleWarn(`disconnected <=X=> ${server.URL}`)
+    ConsoleWarn(`disconnected <=X=> ${node.URL}`)
   })
 }
 
-let jobServerConn = null
+let jobNodeConn = null
 
-function keepServerConn() {
+function keepNodeConn() {
   let notConnected = []
   Servers.forEach(server => {
     if (Conns[server.Address] == undefined) {
       notConnected.push(server)
     }
   })
-
-  // ConsoleWarn(notConnected)
 
   if (notConnected.length == 0) {
     return
@@ -583,39 +512,11 @@ function keepServerConn() {
   }
 }
 
-// client server
-let ClientServer = null
-
-function startClientServer() {
-  if (ClientServer == null) {
-    ClientServer = new WebSocket.Server({
-      port: 8000, //to bind on 80, must use "sudo node main.js"
-      clientTracking: true,
-      maxPayload: 512 * 1024
-    })
-
-    ClientServer.on("connection", function connection(ws) {
-      ws.on("message", function incoming(message) {
-        checkMessage(ws, message)
-      })
-
-      ws.on("close", function close() {
-        let connAddress = fetchConnAddress(ws)
-        if (connAddress != null) {
-          ConsoleWarn(`client <${connAddress}> disconnect...`)
-          delete Conns[connAddress]
-        }
-      })
-    })
-  }
-}
-
 function main() {
   bulletinStat()
-  startClientServer()
 
-  if (jobServerConn == null) {
-    jobServerConn = setInterval(keepServerConn, 8000)
+  if (jobNodeConn == null) {
+    jobNodeConn = setInterval(keepNodeConn, 8000)
   }
 }
 

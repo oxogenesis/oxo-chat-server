@@ -20,14 +20,6 @@ const Servers = [
 ]
 const SelfURL = 'ws://127.0.0.1:8000'
 
-function addServer(address, url) {
-  Servers.push({
-    URL: url,
-    Address: address
-  })
-  Servers = UniqArray(Servers)
-}
-
 const keypair = oxoKeyPairs.deriveKeypair(Seed)
 const SelfAddress = oxoKeyPairs.deriveAddress(keypair.publicKey)
 const SelfPublicKey = keypair.publicKey
@@ -99,37 +91,41 @@ function handleMessage(address, json) {
   }
 }
 
-function checkMessage(ws, message) {
-  // ConsoleInfo(`###################LOG################### Client Message:`)
-  // ConsoleInfo(message)
+async function checkMessage(ws, message) {
+  ConsoleInfo(`###################LOG################### Client Message:`)
+  ConsoleInfo(`${message}`)
   // ConsoleInfo(`${message.slice(0, 512)}`)
   let json = MsgValidate(message)
   if (json == false) {
     // json格式不合法
     // sendServerMessage(ws, MessageCode.JsonSchemaInvalid)
-    ConsoleWarn(`json格式不合法`)
+    ConsoleWarn(`json schema invalid...`)
     teminateConn(ws)
-  } else {
-    if (json.ObjectType == ObjectType.Bulletin) {
-      CacheBulletin(ws, json)
-      return
-    }
-
+  } else if (json.ObjectType) {
+    // ConsoleDebug(`checkMessage:${0}`)
+    let connAddress = fetchConnAddress(ws)
+    handleObject(connAddress, message, json)
+  } else if (json.Action) {
+    // ConsoleDebug(`checkMessage:${1}`)
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     if (Conns[address] == ws) {
+      // ConsoleDebug(`checkMessage:${2}`)
       // 连接已经通过"声明消息"校验过签名
       // "声明消息"之外的其他消息，由接收方校验
       // 伪造的"公告消息"无法通过接收方校验，也就无法被接受方看见（进而不能被引用），也就不具备传播能力
       // 伪造的"消息"无法通过接收方校验，也就无法被接受方看见
       // 所以服务器端只校验"声明消息"签名的有效性，并与之建立连接，后续消息无需校验签名，降低服务器运算压力
-      handleMessage(address, json)
+      handleMessage(address, message, json)
     } else {
+      // ConsoleDebug(`checkMessage:${3}`)
       let connAddress = fetchConnAddress(ws)
+      // ConsoleDebug(`checkMessage:${address}`)
+      // ConsoleDebug(`checkMessage:${connAddress}`)
       if (connAddress != null && connAddress != address) {
         // using different address in same connection
         // sendServerMessage(ws, MessageCode.AddressChanged)
-        teminateConn(ws)
       } else {
+        // ConsoleDebug(`checkMessage:${4}`)
         if (!VerifyJsonSignature(json)) {
           // "声明消息"签名不合法
           // sendServerMessage(ws, MessageCode.SignatureInvalid)
@@ -138,19 +134,26 @@ function checkMessage(ws, message) {
         }
 
         if (json.Timestamp + 60000 < Date.now()) {
-          // "声明消息"生成时间过早
+          // "声明消息"生成时间过早`
           // sendServerMessage(ws, MessageCode.TimestampInvalid)
           teminateConn(ws)
           return
         }
 
-        if (connAddress == null && Conns[address] == null) {
+        if (connAddress == null && Conns[address] == null && json.Action === ActionCode.Declare) {
           // new connection and new address
-          // 当前连接无对应地址，当前地址无对应连接，全新连接
-          ConsoleInfo(`connection established from client <${address}>`)
+          // 当前连接无对应地址，当前地址无对应连接，全新连接，接受客户端声明
+          ConsoleWarn(`connected <===> client : <${address}>`)
           Conns[address] = ws
-          if (json.ActionCode == ActionCode.Declare && CheckServerURL(json.URL)) {
-            addServer(address, json.URL)
+          if (json.URL != null && CheckServerURL(json.URL)) {
+            // Server Conntion
+            NodeList.push({
+              URL: json.URL,
+              Address: address
+            })
+            NodeList = UniqArray(NodeList)
+            let msg = GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL)
+            SendMessage(address, msg)
           }
           // handleMessage(message, json)
 

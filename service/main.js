@@ -124,7 +124,7 @@ async function downloadBulletinFile(address) {
   }
 }
 
-async function CacheBulletin(bulletin) {
+async function CacheBulletin(from, bulletin) {
   let timestamp = Date.now()
   let hash = QuarterSHA512(JSON.stringify(bulletin))
   let address = oxoKeyPairs.deriveAddress(bulletin.PublicKey)
@@ -203,7 +203,7 @@ async function CacheBulletin(bulletin) {
           }
           if (f.chunk_cursor < f.chunk_length) {
             let msg = GenBulletinFileChunkRequest(f.hash, f.chunk_cursor + 1, address, SelfPublicKey, SelfPrivateKey)
-            SendMessage(address, msg)
+            SendMessage(from, msg)
           }
         })
       }
@@ -428,7 +428,7 @@ async function handleObject(from, message, json) {
   }
 
   if (json.ObjectType == ObjectType.Bulletin && VerifyBulletinJson(json)) {
-    CacheBulletin(json)
+    CacheBulletin(from, json)
     //fetch more bulletin
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     let msg = GenBulletinRequest(address, json.Sequence + 1, address, SelfPublicKey, SelfPrivateKey)
@@ -552,10 +552,10 @@ async function handleMessage(from, message, json) {
       if (bulletin) {
         next_sequence = bulletin.sequence + 1
       }
-      if (next_sequence <= item.Count) {
+      if (bulletin.sequence < item.Count) {
         let bulletin_req = GenBulletinRequest(item.Address, next_sequence, from, SelfPublicKey, SelfPrivateKey)
         SendMessage(from, bulletin_req)
-      } else {
+      } else if (bulletin.sequence > item.Count) {
         bulletin = await prisma.BULLETINS.findFirst({
           where: {
             AND: {
@@ -612,7 +612,7 @@ async function handleMessage(from, message, json) {
     HandelChatMessageSync(json)
   } else if (json.Action === ActionCode.ObjectResponse && VerifyObjectResponseJson(json)) {
     if (json.Object.ObjectType == ObjectType.Bulletin && VerifyBulletinJson(json.Object)) {
-      CacheBulletin(json.Object)
+      CacheBulletin(from, json.Object)
       if (json.To == SelfAddress) {
         //fetch more bulletin
         let address = oxoKeyPairs.deriveAddress(json.Object.PublicKey)
@@ -796,19 +796,24 @@ async function checkMessage(ws, message) {
         }
 
         if (json.Timestamp + 60000 < Date.now()) {
-          //"声明消息"生成时间过早
+          // "声明消息"生成时间过早
           // sendServerMessage(ws, MessageCode.TimestampInvalid)
           teminateConn(ws)
           return
         }
 
         if (connAddress == null && Conns[address] == null && json.Action === ActionCode.Declare) {
-          //new connection and new address
-          //当前连接无对应地址，当前地址无对应连接，全新连接，接受客户端声明
+          // new connection and new address
+          // 当前连接无对应地址，当前地址无对应连接，全新连接，接受客户端声明
           ConsoleWarn(`connected <===> client : <${address}>`)
           Conns[address] = ws
-          if (json.URL != null) {
+          if (json.URL != null && CheckServerURL(json.URL)) {
             // Server Conntion
+            NodeList.push({
+              URL: json.URL,
+              Address: address
+            })
+            NodeList = UniqArray(NodeList)
             let msg = GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL)
             SendMessage(address, msg)
           }
@@ -816,8 +821,8 @@ async function checkMessage(ws, message) {
           SyncClient(address)
         } else if (Conns[address] && Conns[address] != ws && Conns[address].readyState == WebSocket.OPEN) {
           // ConsoleDebug(`checkMessage:${5}`)
-          //new connection kick old conection with same address
-          //当前地址有对应连接，断开旧连接，当前地址对应到当前连接
+          // new connection kick old conection with same address
+          // 当前地址有对应连接，断开旧连接，当前地址对应到当前连接
           // sendServerMessage(Conns[address], MessageCode.NewConnectionOpening)
           Conns[address].close()
           Conns[address] = ws
