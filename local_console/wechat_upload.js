@@ -1,6 +1,7 @@
-const { ConsoleInfo, ConsoleWarn, ConsoleError, ConsoleDebug, DelayExec, UniqArray, CheckServerURL } = require('./util.js')
-const { ActionCode, ObjectType } = require('./oxo_const.js')
+const { ConsoleInfo, ConsoleWarn, ConsoleError } = require('./util.js')
+const { ActionCode } = require('./oxo_const.js')
 const { VerifyJsonSignature } = require('./oxo_util.js')
+const { GenDeclare, GenObjectResponse } = require('./msg_generator.js')
 const { MsgValidate } = require('./msg_validator.js')
 
 const fs = require('fs')
@@ -18,7 +19,6 @@ const Servers = [
     Address: "ospxTHwV9YJEq5g6h3MZy9ASs8EP3vY4L6"
   }
 ]
-const SelfURL = 'ws://127.0.0.1:8000'
 
 const keypair = oxoKeyPairs.deriveKeypair(Seed)
 const SelfAddress = oxoKeyPairs.deriveAddress(keypair.publicKey)
@@ -61,14 +61,14 @@ function teminateConn(ws) {
   }
 }
 
-function sendMessage(ws, msg) {
-  if (ws != null && ws.readyState == WebSocket.OPEN) {
-    ws.send(msg)
+function SendMessage(address, message) {
+  if (Conns[address] != null && Conns[address].readyState == WebSocket.OPEN) {
+    // 對方在綫
+    Conns[address].send(`${message}`)
   }
 }
 
-function handleMessage(address, json) {
-  // ConsoleInfo(json)
+function handleMessage(from, json) {
   if (json.Action == ActionCode.BulletinRequest) {
     // send cache bulletin
     let SQL = `SELECT * FROM BULLETINS WHERE address = "${json.Address}" AND sequence = "${json.Sequence}"`
@@ -81,7 +81,7 @@ function handleMessage(address, json) {
           let address = oxoKeyPairs.deriveAddress(json.PublicKey)
           let bulletin_json = JSON.parse(item.json)
           let msg = GenObjectResponse(bulletin_json, address, SelfPublicKey, SelfPrivateKey)
-          sendMessage(Conns[address], msg)
+          SendMessage(from, msg)
           ConsoleInfo(`response <<< ${json.Address}#${json.Sequence}`)
         } else {
           ConsoleInfo(`response <<< not found...`)
@@ -102,30 +102,23 @@ async function checkMessage(ws, message) {
     ConsoleWarn(`json schema invalid...`)
     teminateConn(ws)
   } else if (json.ObjectType) {
-    // ConsoleDebug(`checkMessage:${0}`)
-    let connAddress = fetchConnAddress(ws)
-    handleObject(connAddress, message, json)
+    // let connAddress = fetchConnAddress(ws)
+    // handleObject(connAddress, message, json)
   } else if (json.Action) {
-    // ConsoleDebug(`checkMessage:${1}`)
     let address = oxoKeyPairs.deriveAddress(json.PublicKey)
     if (Conns[address] == ws) {
-      // ConsoleDebug(`checkMessage:${2}`)
       // 连接已经通过"声明消息"校验过签名
       // "声明消息"之外的其他消息，由接收方校验
       // 伪造的"公告消息"无法通过接收方校验，也就无法被接受方看见（进而不能被引用），也就不具备传播能力
       // 伪造的"消息"无法通过接收方校验，也就无法被接受方看见
       // 所以服务器端只校验"声明消息"签名的有效性，并与之建立连接，后续消息无需校验签名，降低服务器运算压力
-      handleMessage(address, message, json)
+      handleMessage(address, json)
     } else {
-      // ConsoleDebug(`checkMessage:${3}`)
       let connAddress = fetchConnAddress(ws)
-      // ConsoleDebug(`checkMessage:${address}`)
-      // ConsoleDebug(`checkMessage:${connAddress}`)
       if (connAddress != null && connAddress != address) {
         // using different address in same connection
         // sendServerMessage(ws, MessageCode.AddressChanged)
       } else {
-        // ConsoleDebug(`checkMessage:${4}`)
         if (!VerifyJsonSignature(json)) {
           // "声明消息"签名不合法
           // sendServerMessage(ws, MessageCode.SignatureInvalid)
@@ -145,17 +138,6 @@ async function checkMessage(ws, message) {
           // 当前连接无对应地址，当前地址无对应连接，全新连接，接受客户端声明
           ConsoleWarn(`connected <===> client : <${address}>`)
           Conns[address] = ws
-          if (json.URL != null && CheckServerURL(json.URL)) {
-            // Server Conntion
-            NodeList.push({
-              URL: json.URL,
-              Address: address
-            })
-            NodeList = UniqArray(NodeList)
-            let msg = GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL)
-            SendMessage(address, msg)
-          }
-          // handleMessage(message, json)
 
           // 获取最新bulletin
           fetchNextBulletin(ws, address)
@@ -168,7 +150,6 @@ async function checkMessage(ws, message) {
           // sendServerMessage(Conns[address], MessageCode.NewConnectionOpening)
           Conns[address].close()
           Conns[address] = ws
-          // handleMessage(message, json)
         } else {
           ws.send("WTF...")
           teminateConn(ws)
@@ -178,22 +159,13 @@ async function checkMessage(ws, message) {
   }
 }
 
-async function sendBulletins(ws) {
-  for (let i = 0; i < Bulletins.length; i++) {
-    const bulletin = Bulletins[i];
-    await DelayExec(1000)
-    sendMessage(ws, bulletin.json)
-    ConsoleDebug(bulletin.json)
-  }
-}
-
 function connect(server) {
   ConsoleInfo(`--------------------------connect to server--------------------------`)
   ConsoleInfo(server)
   let ws = new WebSocket(server.URL)
   ws.on('open', function open() {
     ConsoleInfo(`connected <===> ${server.URL}`)
-    ws.send(GenDeclare(SelfPublicKey, SelfPrivateKey, SelfURL))
+    ws.send(GenDeclare(SelfPublicKey, SelfPrivateKey))
     Conns[server.Address] = ws
   })
 
@@ -208,7 +180,6 @@ function connect(server) {
   })
 }
 
-const db_regex = /^.+\.db$/
 let jobServerConn = null
 let Bulletins = []
 
@@ -250,7 +221,7 @@ function loadDB() {
 function main() {
   loadDB()
   if (jobServerConn == null) {
-    jobServerConn = setInterval(keepServerConn, 8000)
+    jobServerConn = setInterval(keepServerConn, 5000)
   }
 }
 
