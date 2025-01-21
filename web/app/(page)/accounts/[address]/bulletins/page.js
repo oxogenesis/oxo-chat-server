@@ -24,21 +24,21 @@ async function getData(page, address) {
 
 async function Bulletins(props) {
   let page_cursor = 1
-  if (props.searchParams.page && props.searchParams.page > 1) {
-    page_cursor = props.searchParams.page
+  if ((await props.searchParams).page && (await props.searchParams).page > 1) {
+    page_cursor = (await props.searchParams).page
   }
-  let data = await getData(page_cursor, props.params.address)
+  let data = await getData(page_cursor, (await props.params).address)
   let bulletins = data.bulletins
   let bulletin_size = data.bulletin_size
 
   return (
-    <div>
+    (<div>
       <div className="flex flex-row">
         <div className="flex-none">
-          <Avatar str={props.params.address} size={50} />
+          <Avatar str={(await props.params).address} size={50} />
         </div>
         <div className="flex flex-col">
-          Bulletins#<Account address={props.params.address} />
+          Bulletins#<Account address={(await props.params).address} />
         </div>
       </div>
       <ul>
@@ -58,9 +58,9 @@ async function Bulletins(props) {
           </li>
         ))}
       </ul>
-      <Pagination url={`/accounts/${props.params.address}/bulletins`} page_size={bulletin_size} page_cursor={page_cursor}></Pagination>
-    </div>
-  )
+      <Pagination url={`/accounts/${(await props.params).address}/bulletins`} page_size={bulletin_size} page_cursor={page_cursor}></Pagination>
+    </div>)
+  );
 }
 
 export default Bulletins

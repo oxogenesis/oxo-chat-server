@@ -21,8 +21,8 @@ async function getData() {
 
 async function Accounts(props) {
   let page_cursor = 1
-  if (props.searchParams.page && props.searchParams.page > 1) {
-    page_cursor = props.searchParams.page
+  if ((await props.searchParams).page && (await props.searchParams).page > 1) {
+    page_cursor = (await props.searchParams).page
   }
   let data = await getData(page_cursor)
   let accounts = data.accounts

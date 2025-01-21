@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server'
+import { NextResponse } from "next/server"
 import { PrismaClient } from '@prisma/client'
 import { Json2Str } from '@/lib/Util'
 
 const prisma = new PrismaClient()
 
-export async function GET(request, { params }) {
+export async function GET(request, props) {
+  const params = await props.params;
   // console.log(`=============================>>>0`)
   const { hash = "" } = params
   try {

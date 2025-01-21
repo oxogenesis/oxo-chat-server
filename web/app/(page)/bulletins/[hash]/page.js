@@ -30,10 +30,10 @@ async function getData(hash, page) {
 
 async function Bulletin(props) {
   let page_cursor = 1
-  if (props.searchParams.page && props.searchParams.page > 1) {
-    page_cursor = props.searchParams.page
+  if ((await props.searchParams).page && (await props.searchParams).page > 1) {
+    page_cursor = (await props.searchParams).page
   }
-  let data = await getData(props.params.hash, page_cursor)
+  let data = await getData((await props.params).hash, page_cursor)
 
   let bulletin = data.bulletin
   if (!bulletin) {
@@ -66,7 +66,7 @@ async function Bulletin(props) {
   let qrcode = JSON.stringify(qr_json)
 
   return (
-    <div>
+    (<div>
       <Head>
         <title>{bulletin.address}</title>
         <meta name="description" content={bulletin.address} />
@@ -146,8 +146,8 @@ async function Bulletin(props) {
         </ul>
       </div >
       <Pagination url={`/bulletins/${bulletin.hash}`} page_size={reply_size} page_cursor={page_cursor}></Pagination>
-    </div>
-  )
+    </div>)
+  );
 }
 
 export default Bulletin

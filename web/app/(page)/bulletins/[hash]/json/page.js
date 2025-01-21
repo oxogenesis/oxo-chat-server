@@ -19,7 +19,7 @@ async function getData(hash) {
 }
 
 async function Bulletin(props) {
-  let data = await getData(props.params.hash)
+  let data = await getData((await props.params).hash)
   let bulletin = data.bulletin
   if (!bulletin) {
     notFound()

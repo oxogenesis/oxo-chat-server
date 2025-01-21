@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse } from "next/server"
 
 import { PageSize, Json2Str, ContentHeadSize } from '@/lib/Util'
 
@@ -6,7 +6,8 @@ import prisma from '@/lib/prisma';
 // import { PrismaClient } from '@prisma/client'
 // const prisma = new PrismaClient()
 
-export async function GET(request, { params }) {
+export async function GET(request, props) {
+  const params = await props.params;
   // console.log(`=============================>>>0`)
   const { address = "" } = params
   let page = request.nextUrl.searchParams.get("page")
