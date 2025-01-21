@@ -10,8 +10,8 @@ async function getData(hash) {
   })
   const json = await response.json()
   if (!json) {
-    console.log(`=============================3`)
-    console.log(json)
+    // console.log(`=============================3`)
+    // console.log(json)
     return undefined
   } else {
     return json

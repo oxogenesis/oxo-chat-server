@@ -15,8 +15,8 @@ async function getData(page, address) {
   })
   const json = await response.json()
   if (!json) {
-    console.log(`=============================3`)
-    console.log(json)
+    // console.log(`=============================3`)
+    // console.log(json)
   } else {
     return json
   }

@@ -5,7 +5,7 @@ import { PageSize, Json2Str } from '@/lib/Util'
 const prisma = new PrismaClient()
 
 export async function GET(request, { params }) {
-  console.log(`=============================>>>0`)
+  // console.log(`=============================>>>0`)
   let page = request.nextUrl.searchParams.get("page")
   const { hash = "" } = params
   try {

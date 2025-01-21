@@ -1,5 +1,6 @@
 // 'use client'
 
+import Head from 'next/head'
 import Link from "next/link"
 import { notFound } from 'next/navigation'
 import Account from "@/components/Account"
@@ -19,8 +20,8 @@ async function getData(hash, page) {
   })
   const json = await response.json()
   if (!json) {
-    console.log(`=============================3`)
-    console.log(json)
+    // console.log(`=============================3`)
+    // console.log(json)
     return undefined
   } else {
     return json
@@ -42,7 +43,7 @@ async function Bulletin(props) {
   if (!bulletin.quote) {
     bulletin['quote'] = '[]'
   }
-  
+
   if (!bulletin.file) {
     bulletin['file'] = '[]'
   }
@@ -66,6 +67,10 @@ async function Bulletin(props) {
 
   return (
     <div>
+      <Head>
+        <title>{bulletin.address}</title>
+        <meta name="description" content={bulletin.address} />
+      </Head>
       <div className="flex flex-row">
         <div className="flex-none">
           <Avatar str={bulletin.address} size={50} />
