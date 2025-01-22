@@ -28,6 +28,36 @@ async function getData(hash, page) {
   }
 }
 
+export async function generateMetadata({ params, searchParams }, parent) {
+  // read route params
+  let hash = (await params).hash
+  console.log(hash)
+  let url = `${process.env.BASE_URL}/api/bulletins/${hash}?page=1`
+  console.log(url)
+  const response = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    next: { revalidate: 60 }
+    // cache: 'no-store'
+  })
+  const json = await response.json()
+  const bulletin = json.bulletin
+  if (!json) {
+    // console.log(`=============================3`)
+    // console.log(json)
+    return undefined
+  } else {
+    // 没有靠谱的库，能提取中文关键字
+    let keywords
+    return {
+      title: `OXO Bulletin: ${bulletin.address}#${bulletin.sequence}`,
+      description: `OXO公告: 作者${bulletin.address}的第${bulletin.sequence}号公告`,
+      keywords: keywords,
+      author: `${bulletin.address}`
+    }
+  }
+}
+
+
 async function Bulletin(props) {
   let page_cursor = 1
   if ((await props.searchParams).page && (await props.searchParams).page > 1) {

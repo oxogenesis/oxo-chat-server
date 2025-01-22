@@ -551,25 +551,28 @@ async function handleMessage(from, message, json) {
       let next_sequence = 1
       if (bulletin) {
         next_sequence = bulletin.sequence + 1
-      }
-      if (bulletin.sequence < item.Count) {
+        if (bulletin.sequence < item.Count) {
+          let bulletin_req = GenBulletinRequest(item.Address, next_sequence, from, SelfPublicKey, SelfPrivateKey)
+          SendMessage(from, bulletin_req)
+        } else if (bulletin.sequence > item.Count) {
+          bulletin = await prisma.BULLETINS.findFirst({
+            where: {
+              AND: {
+                address: item.Address,
+                sequence: item.Count + 1
+              }
+            },
+            select: {
+              json: true
+            }
+          })
+          if (bulletin) {
+            SendMessage(from, bulletin.json)
+          }
+        }
+      } else {
         let bulletin_req = GenBulletinRequest(item.Address, next_sequence, from, SelfPublicKey, SelfPrivateKey)
         SendMessage(from, bulletin_req)
-      } else if (bulletin.sequence > item.Count) {
-        bulletin = await prisma.BULLETINS.findFirst({
-          where: {
-            AND: {
-              address: item.Address,
-              sequence: item.Count + 1
-            }
-          },
-          select: {
-            json: true
-          }
-        })
-        if (bulletin) {
-          SendMessage(from, bulletin.json)
-        }
       }
     }
     let msg = GenBulletinAddressListRequest(json.Page + 1, SelfPublicKey, SelfPrivateKey)
